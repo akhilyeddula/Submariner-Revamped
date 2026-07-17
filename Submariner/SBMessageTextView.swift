@@ -21,6 +21,6 @@ struct SBMessageTextView: View {
     }
 }
 
-#Preview {
+/* #Preview {
     SBMessageTextView(message: "Hello world")
-}
+} */

@@ -35,9 +35,12 @@ Doing so isn't fatal (it's not a secret), but it is annoying for other contribut
 
 ### Not yet released
 
+* Fix playlist tracks showing as empty and 0:00 duration with "No URL" error after clicking on a playlist.
 * Fix keychain password prompts showing repeatedly when loading covers.
 * Menu items have icons on macOS 26.
 * Prevent claiming another artist's albums, until we gain multiple artists on a single album.
+* Optimized playback startup time by caching auth parameters, deferring UI updates asynchronously, and adjusting AVPlayer buffering.
+* Improved cover art loading speed with an in-memory NSCache and shared URLSession connection reuse.
 
 ### Version 3.4
 

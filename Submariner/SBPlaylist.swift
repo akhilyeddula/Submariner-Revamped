@@ -9,6 +9,7 @@
 
 import Foundation
 import CoreData
+import os
 
 @objc(SBPlaylist)
 public class SBPlaylist: SBResource {
@@ -27,11 +28,24 @@ public class SBPlaylist: SBResource {
     
     @objc dynamic var tracks: [SBTrack]? {
         get {
+            let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBPlaylist")
+            logger.info("Getting tracks for playlist \(self.resourceName ?? "<nil>"), trackIDs count: \(self.trackIDs?.count ?? 0)")
             // If tracks get deleted, compactMap means we can skip over them if they turn out to not exist anymore, without complicated schemes
-            return trackIDs?.compactMap {
-                if let moc = self.managedObjectContext,
-                   let oid = moc.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: $0) {
-                    return moc.object(with: oid) as? SBTrack
+            return trackIDs?.compactMap { uri in
+                if let moc = self.managedObjectContext {
+                    if let oid = moc.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: uri) {
+                        let track = moc.object(with: oid) as? SBTrack
+                        if track == nil {
+                            logger.warning("Failed to cast resolved object for URI: \(uri) to SBTrack")
+                        } else {
+                            logger.info("Successfully resolved URI: \(uri) to track: \(track?.itemName ?? "<nil>")")
+                        }
+                        return track
+                    } else {
+                        logger.warning("Failed to resolve URI to managedObjectID: \(uri)")
+                    }
+                } else {
+                    logger.warning("No managedObjectContext for playlist when resolving URI: \(uri)")
                 }
                 return nil
             }
@@ -45,19 +59,25 @@ public class SBPlaylist: SBResource {
     
     func add(track: SBTrack) {
         ensureTrackIDsNotNil()
-        trackIDs?.append(track.objectID.uriRepresentation())
+        var ids = trackIDs ?? []
+        ids.append(track.objectID.uriRepresentation())
+        trackIDs = ids
     }
     
     @objc(addTracks:) func add(tracks: [SBTrack]) {
         ensureTrackIDsNotNil()
+        var ids = trackIDs ?? []
         let additionalIDs = tracks.map { $0.objectID.uriRepresentation() }
-        trackIDs?.append(contentsOf: additionalIDs)
+        ids.append(contentsOf: additionalIDs)
+        trackIDs = ids
     }
     
     func add(tracks: [SBTrack], at row: Int) {
         ensureTrackIDsNotNil()
+        var ids = trackIDs ?? []
         let additionalIDs = tracks.map { $0.objectID.uriRepresentation() }
-        trackIDs?.insert(contentsOf: additionalIDs, at: row)
+        ids.insert(contentsOf: additionalIDs, at: row)
+        trackIDs = ids
     }
     
     func remove(indices: IndexSet) {

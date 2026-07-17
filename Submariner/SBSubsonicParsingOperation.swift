@@ -380,21 +380,29 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
     
     private func parseElementEntryForPlaylist(attributeDict: [String: String]) {
         if let currentPlaylist = self.currentPlaylist, let id = attributeDict["id"] {
-            if let track = fetchTrack(id: id) {
+            let track: SBTrack
+            if let fetchedTrack = fetchTrack(id: id) {
                 logger.info("Adding track (and updating) with ID: \(id, privacy: .public) to playlist \(currentPlaylist.itemId ?? "(no ID?)", privacy: .public)")
                 
-                updateTrackDependenciesForTag(track, attributeDict: attributeDict, shouldFetchAlbumArt: false)
-                
-                currentPlaylist.add(track: track)
+                updateTrackDependenciesForTag(fetchedTrack, attributeDict: attributeDict, shouldFetchAlbumArt: false)
+                track = fetchedTrack
             } else {
                 // if the track doesn't exist yet, it'll be born without context. provide that context (artist/album/cover)
                 // FIXME: Should we update *existing* tracks regardless? For previous cases they were pulled anew...
                 logger.info("Creating new track with ID: \(id, privacy: .public) for playlist \(currentPlaylist.itemId ?? "(no ID?)", privacy: .public)")
-                let track = createTrack(attributes: attributeDict)
-                updateTrackDependenciesForTag(track, attributeDict: attributeDict, shouldFetchAlbumArt: false)
-                
-                currentPlaylist.add(track: track)
+                let newTrack = createTrack(attributes: attributeDict)
+                updateTrackDependenciesForTag(newTrack, attributeDict: attributeDict, shouldFetchAlbumArt: false)
+                track = newTrack
             }
+            
+            // Obtain a permanent ID now, while we're on the correct context queue.
+            // If we store the temporary URI, it becomes invalid after save() and the
+            // track will appear missing (0:00, "No URL") in the playlist view.
+            if track.objectID.isTemporaryID {
+                try? threadedContext.obtainPermanentIDs(for: [track])
+            }
+            
+            currentPlaylist.add(track: track)
         } else {
             logger.warning("No current playlist, even though we have an entry element?")
         }
@@ -643,10 +651,15 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
             }
         case .getArtists:
             // purge artists not returned, since unlike getIndexes, getArtists returns the full list
+            let referenced = getPlaylistReferencedIDs()
             let artistRequest: NSFetchRequest<SBArtist> = SBArtist.fetchRequest()
             artistRequest.predicate = NSPredicate(format: "(server == %@) && (NOT (self IN %@))", server, artistsReturned)
             if let artists = try? threadedContext.fetch(artistRequest) {
                 for artist in artists {
+                    if referenced.artistIDs.contains(artist.objectID) {
+                        logger.info("Skipping deletion of artist \(artist.itemName ?? "<nil>") because it is referenced in a playlist")
+                        continue
+                    }
                     logger.info("Removing artist not in list \(artist.itemId ?? "<nil>", privacy: .public) name \(artist.itemName ?? "<nil>")")
                     threadedContext.delete(artist)
                 }
@@ -654,16 +667,26 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
         case .getArtist(_):
             // purge albums not returned to deal with ID transition
             if let currentArtist = self.currentArtist, let albums = currentArtist.albums as? Set<SBAlbum> {
+                let referenced = getPlaylistReferencedIDs()
                 let difference = albums.subtracting(Set(albumsReturned))
                 for album in difference {
+                    if referenced.albumIDs.contains(album.objectID) {
+                        logger.info("Skipping removal of album \(album.itemName ?? "<nil>") because it is referenced in a playlist")
+                        continue
+                    }
                     currentArtist.removeFromAlbums(album)
                 }
             }
         case .getAlbum(id: _):
             // purge songs not returned
             if let currentAlbum = self.currentAlbum, let tracks = currentAlbum.tracks as? Set<SBTrack> {
+                let referenced = getPlaylistReferencedIDs()
                 let difference = tracks.subtracting(Set(tracksReturned))
                 for track in difference {
+                    if referenced.trackIDs.contains(track.objectID) {
+                        logger.info("Skipping removal of track \(track.itemName ?? "<nil>") because it is referenced in a playlist")
+                        continue
+                    }
                     currentAlbum.removeFromTracks(track)
                 }
             }
@@ -691,6 +714,8 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
             postServerNotification(.SBSubsonicPlaylistsUpdated)
         case .getPlaylist(_):
             currentPlaylist = nil
+            // Notify the UI to reload so the freshly-fetched tracks are shown.
+            postServerNotification(.SBSubsonicPlaylistsUpdated)
         case .createPlaylist(_, _):
             postServerNotification(.SBSubsonicPlaylistsCreated)
         case .getNowPlaying:
@@ -1335,5 +1360,55 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
         updateEpisode(episode, attributes: attributes)
         
         return episode
+    }
+    
+    private func getPlaylistReferencedIDs() -> (trackIDs: Set<NSManagedObjectID>, albumIDs: Set<NSManagedObjectID>, artistIDs: Set<NSManagedObjectID>) {
+        var trackIDs = Set<NSManagedObjectID>()
+        var albumIDs = Set<NSManagedObjectID>()
+        var artistIDs = Set<NSManagedObjectID>()
+        
+        let playlistRequest = NSFetchRequest<SBPlaylist>(entityName: "Playlist")
+        playlistRequest.predicate = NSPredicate(format: "server == %@", server)
+        guard let playlists = try? threadedContext.fetch(playlistRequest) else {
+            return (trackIDs, albumIDs, artistIDs)
+        }
+        
+        var trackURIs = Set<URL>()
+        for playlist in playlists {
+            if let ids = playlist.trackIDs {
+                trackURIs.formUnion(ids)
+            }
+        }
+        
+        if trackURIs.isEmpty {
+            return (trackIDs, albumIDs, artistIDs)
+        }
+        
+        var objectIDs: [NSManagedObjectID] = []
+        for uri in trackURIs {
+            if let oid = threadedContext.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: uri) {
+                objectIDs.append(oid)
+            }
+        }
+        
+        if objectIDs.isEmpty {
+            return (trackIDs, albumIDs, artistIDs)
+        }
+        
+        let trackRequest = NSFetchRequest<SBTrack>(entityName: "Track")
+        trackRequest.predicate = NSPredicate(format: "self IN %@", objectIDs)
+        if let tracks = try? threadedContext.fetch(trackRequest) {
+            for track in tracks {
+                trackIDs.insert(track.objectID)
+                if let album = track.album {
+                    albumIDs.insert(album.objectID)
+                    if let artist = album.artist {
+                        artistIDs.insert(artist.objectID)
+                    }
+                }
+            }
+        }
+        
+        return (trackIDs, albumIDs, artistIDs)
     }
 }

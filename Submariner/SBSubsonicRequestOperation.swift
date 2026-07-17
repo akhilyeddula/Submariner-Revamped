@@ -52,8 +52,7 @@ class SBSubsonicRequestOperation: SBOperation {
     }
     
     private func request(url: URL, type: SBSubsonicRequestType, customization: ParsingCustomization? = nil) {
-        let config = URLSessionConfiguration.default
-        let session = URLSession(configuration: config)
+        let session = URLSession.shared
         var request = URLRequest(url: url)
         if self.usesPost {
             request.httpMethod = "POST"

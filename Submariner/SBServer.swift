@@ -117,6 +117,15 @@ public class SBServer: SBResource {
         }
     }
     
+    public override func didChangeValue(forKey key: String) {
+        super.didChangeValue(forKey: key)
+        if key == "password" || key == "username" || key == "useTokenAuth" || key == "url" {
+            synchronized(SBServer.self) {
+                SBServer.cachedBaseParameters.removeValue(forKey: self.objectID)
+            }
+        }
+    }
+    
     // #MARK: - Custom Accessors (Source List Tree Support)
     
     // This is used by outline views can return a variety of things.
@@ -394,12 +403,21 @@ public class SBServer: SBResource {
         request.main()
     }
     
+    static private var cachedBaseParameters: [NSManagedObjectID: [String: String]] = [:]
+
     /**
      Gets the base query string parameters based on the server object's properties.
      
      The intent is to use these as a base, then add other options that your command requires.
      */
     @objc func getBaseParameters() -> [String: String] {
+        let cached = synchronized(SBServer.self) {
+            SBServer.cachedBaseParameters[self.objectID]
+        }
+        if let cached = cached {
+            return cached
+        }
+        
         var parameters: [String: String] = [:]
         if let username = self.username, let password = self.password {
             parameters["u"] = username
@@ -428,6 +446,10 @@ public class SBServer: SBResource {
             } else {
                 logger.info("\tparameter \(k, privacy: .public) = \(v, privacy: .public)")
             }
+        }
+        
+        synchronized(SBServer.self) {
+            SBServer.cachedBaseParameters[self.objectID] = parameters
         }
         return parameters
     }

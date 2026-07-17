@@ -14,9 +14,23 @@ import CoreData
 public class SBAlbum: SBMusicItem, SBStarrable {
     static let nullCover = NSImage(systemSymbolName: "questionmark.square.dashed", accessibilityDescription: "No Album Art")
     
+    static let coverCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("SBSubsonicCoversUpdatedNotification"), object: nil, queue: nil) { _ in
+            cache.removeAllObjects()
+        }
+        return cache
+    }()
+    
     override public func imageRepresentation() -> Any! {
         if let cover = self.cover, let path = cover.imagePath as String? {
-            return NSImage.init(byReferencingFile: path)
+            if let cached = SBAlbum.coverCache.object(forKey: path as NSString) {
+                return cached
+            }
+            if let image = NSImage(byReferencingFile: path) {
+                SBAlbum.coverCache.setObject(image, forKey: path as NSString)
+                return image
+            }
         }
         return SBAlbum.nullCover;
     }

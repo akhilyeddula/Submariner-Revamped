@@ -46,6 +46,7 @@ extension NSNotification.Name {
         // per https://stackoverflow.com/a/29324777 - seems to cause problem for video, but
         // we don't care about video
         remotePlayer.allowsExternalPlayback = false;
+        remotePlayer.automaticallyWaitsToMinimizeStalling = false
         
         // observers
         playRateObserver = UserDefaults.standard.observe(\.playRate, options: [.initial, .new], changeHandler: { defaults, change in
@@ -588,10 +589,6 @@ extension NSNotification.Name {
         }
         
         self.currentIndex = index
-        // Putting it here instead of on AVPlayerItem seems more reliable,
-        // guarantees it'll happen first. Might block the AVPlayer, but
-        // that seems desirable as opposed to risking it get sidetracked.
-        cacheTrack()
         
         track.isPlaying = true
         NotificationCenter.default.post(name: .SBPlayerPlaylistUpdated, object: self)
@@ -599,14 +596,18 @@ extension NSNotification.Name {
         isPaused = false
         NotificationCenter.default.post(name: .SBPlayerPlayState, object: self)
         
-        // update npic
-        updateSystemNowPlaying()
-        postNowPlayingNotification()
-        
-        // scrobble if doing that. navidrome/navidrome#2347 implies we should always do this,
-        // even if we're using the remote stream URL instead of a local track.
-        if let server = track.server, UserDefaults.standard.scrobbleToServer, let itemId = track.itemId {
-            server.scrobble(id: itemId)
+        DispatchQueue.main.async {
+            self.cacheTrack()
+            
+            // update npic
+            self.updateSystemNowPlaying()
+            self.postNowPlayingNotification()
+            
+            // scrobble if doing that. navidrome/navidrome#2347 implies we should always do this,
+            // even if we're using the remote stream URL instead of a local track.
+            if let server = track.server, UserDefaults.standard.scrobbleToServer, let itemId = track.itemId {
+                server.scrobble(id: itemId)
+            }
         }
     }
     
@@ -635,6 +636,7 @@ extension NSNotification.Name {
             
             let asset = AVURLAsset(url: url, options: options)
             let newItem = AVPlayerItem(asset: asset)
+            newItem.preferredForwardBufferDuration = 1.0
             
             remotePlayer.replaceCurrentItem(with: newItem)
             remotePlayer.volume = volume
@@ -967,16 +969,7 @@ extension NSNotification.Name {
     }
     
     private func unplayAllTracks() {
-        if let moc = self.currentTrack?.managedObjectContext {
-            let predicate = NSPredicate(format: "(isPlaying == YES)")
-            let fetchRequest = NSFetchRequest<SBTrack>(entityName: "Track")
-            fetchRequest.predicate = predicate
-            if let tracks = try? moc.fetch(fetchRequest) {
-                for track in tracks {
-                    track.isPlaying = false
-                }
-            }
-        }
+        self.currentTrack?.isPlaying = false
     }
     
     private func cacheTrack() {

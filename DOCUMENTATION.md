@@ -64,3 +64,9 @@ Cover art fetches are pure HTTP downloads with no dependency on other requests. 
 
 - **Cover art resolution:** Covers are requested at the `MaxCoverSize` (300px) resolution. For Retina displays, this means covers may appear slightly soft when displayed at sizes larger than 150×150 logical points. A future enhancement could request at 2× the display size.
 - **Serial server queue:** The main server queue is serial (max 1 concurrent operation) to avoid Core Data threading issues. This means metadata fetches are still serialized. Increasing concurrency requires careful Core Data context management.
+
+---
+
+## Technical Debt & Optimizations
+
+- **`unplayAllTracks()` Optimization:** Originally, clearing the `isPlaying` flag across the library involved fetching all tracks with `isPlaying == YES` via a Core Data query. To optimize playback startup time, this was replaced with a direct flag change on `self.currentTrack?.isPlaying = false` in `SBPlayer.swift`. While significantly faster, if any track erroneously gets stuck with `isPlaying == YES` (e.g., due to an unexpected crash or state desync), it will not be corrected automatically during normal playback initiation.

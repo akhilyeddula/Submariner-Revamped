@@ -43,7 +43,40 @@ class SBLibraryCleanupOrphansOperation: SBOperation {
         // Albums must belong to an artist
         fetchRequest.predicate = NSPredicate(format: "(artist == nil)")
         if let albums = try? threadedContext.fetch(fetchRequest) {
+            // Fetch all playlist-referenced album IDs to protect them
+            var referencedAlbumIDs = Set<NSManagedObjectID>()
+            let playlistRequest = NSFetchRequest<SBPlaylist>(entityName: "Playlist")
+            if let playlists = try? threadedContext.fetch(playlistRequest) {
+                var trackURIs = Set<URL>()
+                for playlist in playlists {
+                    if let ids = playlist.trackIDs {
+                        trackURIs.formUnion(ids)
+                    }
+                }
+                var objectIDs: [NSManagedObjectID] = []
+                for uri in trackURIs {
+                    if let oid = threadedContext.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: uri) {
+                        objectIDs.append(oid)
+                    }
+                }
+                if !objectIDs.isEmpty {
+                    let trackRequest = NSFetchRequest<SBTrack>(entityName: "Track")
+                    trackRequest.predicate = NSPredicate(format: "self IN %@", objectIDs)
+                    if let tracks = try? threadedContext.fetch(trackRequest) {
+                        for track in tracks {
+                            if let album = track.album {
+                                referencedAlbumIDs.insert(album.objectID)
+                            }
+                        }
+                    }
+                }
+            }
+
             for album in albums {
+                if referencedAlbumIDs.contains(album.objectID) {
+                    logger.info("Skipping deletion of orphan album \"\(album.itemName ?? "<nil>", privacy: .public)\" because it has tracks in a playlist")
+                    continue
+                }
                 let name = album.itemName ?? "<nil>"
                 logger.info("Deleting orphan album \"\(name, privacy: .public)\"")
                 self.threadedContext.delete(album)
