@@ -42,6 +42,9 @@ public class SBTrack: SBMusicItem, SBStarrable {
             var parameters = server.getBaseParameters()
             parameters["maxBitRate"] = UserDefaults.standard.string(forKey: "maxBitRate")
             parameters["id"] = self.itemId
+            // Instruct the server to estimate and include a Content-Length header.
+            // AVFoundation requires this for its HTTP pipeline to work correctly.
+            parameters["estimateContentLength"] = "true"
             
             return URL.URLWith(string: url, command: "rest/stream.view", parameters: parameters)
         }
