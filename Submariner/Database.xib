@@ -182,8 +182,6 @@
                     <toolbarItem implicitItemIdentifier="NSToolbarSpaceItem" id="otC-h2-Pjt"/>
                     <toolbarItem implicitItemIdentifier="NSToolbarFlexibleSpaceItem" id="Jsx-Cl-TNf"/>
                     <toolbarItem implicitItemIdentifier="F5D6BCAC-00D0-4F36-BCA2-9E2D56606A99" explicitItemIdentifier="NSToolbarSidebarTrackingSeparatorItemIdentifier" label="Sidebar Separator" paletteLabel="Sidebar Separator" tag="-1" bordered="YES" id="urp-JS-CHY">
-                        <size key="minSize" width="24" height="25"/>
-                        <size key="maxSize" width="24" height="25"/>
                     </toolbarItem>
                     <toolbarItem implicitItemIdentifier="0E266961-1DCC-4AE8-AD1D-AD17E4D0C9DF" explicitItemIdentifier="SBTBProgressIndicator" label="Progress Indicator" paletteLabel="Progress Indicator" tag="-1" title="Progress Indicator" sizingBehavior="auto" navigational="YES" id="amK-dn-Tr2">
                         <nil key="toolTip"/>
