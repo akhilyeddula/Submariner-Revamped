@@ -9,7 +9,7 @@
 import Cocoa
 import UniformTypeIdentifiers
 
-@objc class SBImportOperation: SBOperation {
+@objc class SBImportOperation: SBOperation, @unchecked Sendable {
     private let initialPaths: [URL]
     
     var copyFiles = false

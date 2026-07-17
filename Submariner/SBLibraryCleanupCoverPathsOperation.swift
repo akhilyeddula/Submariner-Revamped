@@ -13,7 +13,7 @@ import os
 
 fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBLibraryCleanupCoverPathsOperation")
 
-class SBLibraryCleanupCoverPathsOperation: SBOperation {
+class SBLibraryCleanupCoverPathsOperation: SBOperation, @unchecked Sendable {
     init(managedObjectContext: NSManagedObjectContext) {
         super.init(managedObjectContext: managedObjectContext, name: "Updating Cover Paths")
     }

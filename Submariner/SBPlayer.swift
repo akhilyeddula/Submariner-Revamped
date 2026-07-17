@@ -35,6 +35,8 @@ extension NSNotification.Name {
     var playerStatusObserver: NSKeyValueObservation?
     var playRateObserver: NSKeyValueObservation?
     
+    private var currentResourceLoaderDelegate: SBResourceLoaderDelegate?
+    
     private override init() {
         super.init()
         
@@ -619,22 +621,41 @@ extension NSNotification.Name {
             if url.isFileURL {
                 logger.info("Playing local track at file: \(url, privacy: .public)")
             } else {
-                logger.info("Playing remote track via \(url.path, privacy: .public) at URL: \(url)")
+                logger.info("Playing remote track via \(url.path, privacy: .public) at URL: \(url.absoluteString, privacy: .public)")
+                print("DEBUG: AVPlayer URL is \(url.absoluteString)")
             }
             
             var options: [String: Any] = [:]
             if let contentType = track.macOSCompatibleContentType() {
                 logger.info("Track MIME type is \(contentType, privacy: .public)")
-                // Workaround an issue where macOS requires a specific FLAC mimetype.
                 options["AVURLAssetOutOfBandMIMETypeKey"] = contentType
-                // Seeking is inaccurate with FLACs otherwise.
-                // Not enabled for other content in case it runs into issues.
                 if contentType.contains("flac") {
                     options[AVURLAssetPreferPreciseDurationAndTimingKey] = NSNumber(value: true)
                 }
             }
             
-            let asset = AVURLAsset(url: url, options: options)
+            var assetURL = url
+            if !url.isFileURL {
+                var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+                if components?.scheme == "http" {
+                    components?.scheme = "sbhttp"
+                } else if components?.scheme == "https" {
+                    components?.scheme = "sbhttps"
+                }
+                if let modifiedURL = components?.url {
+                    assetURL = modifiedURL
+                }
+            }
+            
+            let asset = AVURLAsset(url: assetURL, options: options)
+            
+            if !url.isFileURL {
+                let contentType = track.macOSCompatibleContentType() ?? "audio/mpeg"
+                let delegate = SBResourceLoaderDelegate(contentType: contentType)
+                asset.resourceLoader.setDelegate(delegate, queue: DispatchQueue.main)
+                self.currentResourceLoaderDelegate = delegate
+            }
+            
             let newItem = AVPlayerItem(asset: asset)
             newItem.preferredForwardBufferDuration = 1.0
             

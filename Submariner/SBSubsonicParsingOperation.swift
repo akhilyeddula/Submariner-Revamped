@@ -30,7 +30,7 @@ extension NSNotification.Name{
     static let SBSubsonicLibraryScanProgress = NSNotification.Name("SBSubsonicLibraryScanProgress")
 }
 
-class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
+class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sendable {
     let requestType: SBSubsonicRequestType
     var server: SBServer!
     let xmlData: Data?

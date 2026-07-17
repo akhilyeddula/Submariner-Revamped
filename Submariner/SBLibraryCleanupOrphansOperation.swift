@@ -13,7 +13,7 @@ import os
 
 fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBLibraryCleanupOrphansOperation")
 
-class SBLibraryCleanupOrphansOperation: SBOperation {
+class SBLibraryCleanupOrphansOperation: SBOperation, @unchecked Sendable {
     init(managedObjectContext: NSManagedObjectContext) {
         super.init(managedObjectContext: managedObjectContext, name: "Deleting Orphaned Objects")
     }

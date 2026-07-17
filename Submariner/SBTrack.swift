@@ -126,11 +126,11 @@ public class SBTrack: SBMusicItem, SBStarrable {
     }
     
     @objc func macOSCompatibleContentType() -> String? {
-        if let contentType = self.contentType,
-           contentType == "audio/x-flac" {
+        let type = self.contentType ?? "audio/mpeg"
+        if type == "audio/x-flac" {
             return "audio/flac"
         }
-        return self.contentType
+        return type
     }
     
     // #MARK: - AppleScript wrappers

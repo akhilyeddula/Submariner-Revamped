@@ -41,6 +41,7 @@ Doing so isn't fatal (it's not a secret), but it is annoying for other contribut
 * Prevent claiming another artist's albums, until we gain multiple artists on a single album.
 * Optimized playback startup time by caching auth parameters, deferring UI updates asynchronously, and adjusting AVPlayer buffering.
 * Improved cover art loading speed with an in-memory NSCache and shared URLSession connection reuse.
+* Drastically reduced playback initiation latency and eliminated network errors by intercepting AVPlayer requests with a custom AVAssetResourceLoaderDelegate.
 
 ### Version 3.4
 

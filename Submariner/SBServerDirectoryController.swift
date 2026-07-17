@@ -356,11 +356,11 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
                     .contextMenu {
                         DirectoryContextMenu(selected: selected, serverDirectoryController: serverDirectoryController)
                     }
-                    .onChange(of: directories) { _ in
+                    .onChange(of: directories) {
                         // Invalidate to avoid changes to the left of us from keeping new columns around.
                         selected = Set()
                     }
-                    .onChange(of: selected) { newValue in
+                    .onChange(of: selected) { _, newValue in
                         updateSelection(newValue: newValue)
                     }
                     .onAppear {
@@ -434,7 +434,7 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
                             }
                             // XXX: We should make this resizable (split view with synchronized sizes?)
                             .frame(width: 250)
-                            .onChange(of: serverDirectoryController.server) { newValue in
+                            .onChange(of: serverDirectoryController.server) { _, newValue in
                                 selected = nil
                                 updatePredicate(server: newValue)
                             }
@@ -447,7 +447,7 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
                                 
                                 serverDirectoryController.server?.getServerDirectories()
                             }
-                            .onChange(of: selected) { newValue in
+                            .onChange(of: selected) { _, newValue in
                                 // We're not doing anything with this in leftmost
                                 self.serverDirectoryController._selectedTracks = []
                                 self.serverDirectoryController._selectedDirectories = selected != nil ? [selected!] : []

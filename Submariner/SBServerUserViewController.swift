@@ -272,7 +272,7 @@ extension NSNotification.Name {
                         }
                     }
                     .listStyle(.inset(alternatesRowBackgrounds: true))
-                    .onChange(of: serverUsersController.server) { newValue in
+                    .onChange(of: serverUsersController.server) { _, newValue in
                         updatePredicate(server: newValue)
                         // if the sidebar is open and we switch servers, make sure we have the latest if it makes sense
                         if (self.serverUsersController.databaseController?.isServerUsersShown == true) {

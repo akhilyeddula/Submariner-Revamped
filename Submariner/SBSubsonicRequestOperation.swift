@@ -11,7 +11,7 @@ import os
 
 fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBSubsonicRequestOperation")
 
-class SBSubsonicRequestOperation: SBOperation {
+class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
     typealias ParsingCustomization = ((SBSubsonicParsingOperation) -> Void)
     
     var server: SBServer!

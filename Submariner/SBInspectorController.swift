@@ -310,10 +310,10 @@ extension NSNotification.Name {
                 .frame(height: 41)
                 .padding([.leading, .trailing], 8)
             }
-            .onChange(of: inspectorController.selectedTracks) { _ in
+            .onChange(of: inspectorController.selectedTracks) {
                 updateSelection()
             }
-            .onChange(of: player.isPlaying) { _ in
+            .onChange(of: player.isPlaying) {
                 updateSelection()
             }
             .onAppear {

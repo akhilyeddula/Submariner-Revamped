@@ -52,6 +52,7 @@
 		3E702DE92A428CF6005F7184 /* SBSubsonicParsingOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E702DE82A428CF6005F7184 /* SBSubsonicParsingOperation.swift */; };
 		3E70B2DF2A2BDC55002C0B93 /* SBApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E70B2DE2A2BDC55002C0B93 /* SBApplication.swift */; };
 		3E70B2E12A2D52A1002C0B93 /* SBPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E70B2E02A2D52A1002C0B93 /* SBPlayer.swift */; };
+		3E70B2F12A2D52A1002C0B93 /* SBResourceLoaderDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E70B2F02A2D52A1002C0B93 /* SBResourceLoaderDelegate.swift */; };
 		3E7491972B6A1AE00052CBCE /* SBTracklistController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E7491962B6A1AE00052CBCE /* SBTracklistController.swift */; };
 		3E8124272BEFF4F80060DDAF /* SBToggleNameTransformer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E8124262BEFF4F80060DDAF /* SBToggleNameTransformer.swift */; };
 		3E8124292BF408110060DDAF /* NSString+Comparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E8124282BF408110060DDAF /* NSString+Comparison.swift */; };
@@ -219,6 +220,7 @@
 		3E702DE82A428CF6005F7184 /* SBSubsonicParsingOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SBSubsonicParsingOperation.swift; sourceTree = "<group>"; };
 		3E70B2DE2A2BDC55002C0B93 /* SBApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SBApplication.swift; sourceTree = "<group>"; };
 		3E70B2E02A2D52A1002C0B93 /* SBPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SBPlayer.swift; sourceTree = "<group>"; };
+		3E70B2F02A2D52A1002C0B93 /* SBResourceLoaderDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SBResourceLoaderDelegate.swift; sourceTree = "<group>"; };
 		3E7491962B6A1AE00052CBCE /* SBTracklistController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SBTracklistController.swift; sourceTree = "<group>"; };
 		3E8124262BEFF4F80060DDAF /* SBToggleNameTransformer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SBToggleNameTransformer.swift; sourceTree = "<group>"; };
 		3E8124282BF408110060DDAF /* NSString+Comparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSString+Comparison.swift"; sourceTree = "<group>"; };
@@ -693,6 +695,7 @@
 			isa = PBXGroup;
 			children = (
 				3E70B2E02A2D52A1002C0B93 /* SBPlayer.swift */,
+				3E70B2F02A2D52A1002C0B93 /* SBResourceLoaderDelegate.swift */,
 				3E2155112B26E6F0004BCCFC /* SBSubsonicRequestType.swift */,
 			);
 			name = Subsonic;
@@ -934,6 +937,7 @@
 				4CFAFC38139EF20600E82B57 /* MGRecessedPopUpButtonCell.m in Sources */,
 				3E94E5FA2915AB130080FDF6 /* SBRoutePickerView.swift in Sources */,
 				3E70B2E12A2D52A1002C0B93 /* SBPlayer.swift in Sources */,
+				3E70B2F12A2D52A1002C0B93 /* SBResourceLoaderDelegate.swift in Sources */,
 				3EC03B4C29F4F2E0001FDE50 /* SBServer.swift in Sources */,
 				3E04F6422B7DE48400E24E56 /* SBPlayCommand.swift in Sources */,
 				3E2F86CB28DD36E600C5CE23 /* SBMonospaceTextField.swift in Sources */,

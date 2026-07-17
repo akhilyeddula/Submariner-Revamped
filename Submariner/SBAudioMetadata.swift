@@ -129,8 +129,19 @@ import AVFoundation
         } catch {}
     }
     
+    private func loadSync<T>(block: @escaping () async throws -> T) -> T? {
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: T? = nil
+        Task {
+            result = try? await block()
+            semaphore.signal()
+        }
+        semaphore.wait()
+        return result
+    }
+    
     private func initializeAVFoundation(URL: NSURL) throws {
-        self.asset = AVAsset(url: URL as URL)
+        self.asset = AVURLAsset(url: URL as URL)
     }
     
     @objc init(URL: NSURL) throws {
@@ -258,8 +269,8 @@ import AVFoundation
     
     @objc var duration: NSNumber? { // in seconds
         get {
-            if let asset = asset {
-                return NSNumber.init(value: asset.duration.seconds)
+            if let asset = asset, let duration = loadSync(block: { try await asset.load(.duration) }) {
+                return NSNumber.init(value: duration.seconds)
             }
             if let audioFileInfoDict = audioFileInfoDict, let durationString: NSString = audioFileInfoDict["approximate duration in seconds"] as? NSString {
                 // durationString can have , and . - use NumberFormatter
@@ -277,10 +288,10 @@ import AVFoundation
                 return NSNumber.init(value: audioToolboxBitrate / 1000) // not 1024, weirdly
             }
             if let asset = asset {
-                // Uses the first one it can find, which should be the only one
-                for track in asset.tracks(withMediaType: .audio) {
-                    let bitrate: Float = track.estimatedDataRate
-                    return NSNumber.init(value: bitrate / 1000)
+                if let tracks = loadSync(block: { try await asset.loadTracks(withMediaType: .audio) }), let track = tracks.first {
+                    if let bitrate = loadSync(block: { try await track.load(.estimatedDataRate) }) {
+                        return NSNumber.init(value: bitrate / 1000)
+                    }
                 }
             }
             return nil
@@ -297,10 +308,12 @@ import AVFoundation
                     return NSNumber.init(value:  discNumber)
                 }
             }
-            if let asset = asset {
-                for metadata in asset.metadata {
-                    if (metadata.identifier == .iTunesMetadataDiscNumber) {
-                        return metadata.numberValue
+            if let asset = asset, let metadata = loadSync(block: { try await asset.load(.metadata) }) {
+                for item in metadata {
+                    if (item.identifier == .iTunesMetadataDiscNumber) {
+                        let val: NSNumber?? = loadSync(block: { try await item.load(.numberValue) })
+                        if let v = val { return v }
+                        return nil
                     }
                 }
             }
@@ -313,10 +326,12 @@ import AVFoundation
             if let id3Dict = id3Dict, let tpe2: NSString = id3Dict["TPE2"] as? NSString {
                 return tpe2
             }
-            if let asset = asset {
-                for metadata in asset.metadata {
-                    if (metadata.identifier == .iTunesMetadataAlbumArtist) {
-                        return metadata.stringValue as NSString?
+            if let asset = asset, let metadata = loadSync(block: { try await asset.load(.metadata) }) {
+                for item in metadata {
+                    if (item.identifier == .iTunesMetadataAlbumArtist) {
+                        let val: String?? = loadSync(block: { try await item.load(.stringValue) })
+                        if let v = val, let str = v { return str as NSString }
+                        return nil
                     }
                 }
             }

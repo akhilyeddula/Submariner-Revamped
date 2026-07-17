@@ -16,7 +16,7 @@ extension NSNotification.Name {
     static let SBSubsonicOperationFinished = NSNotification.Name("SBSubsonicOperationFinished")
 }
 
-class SBOperation: Operation, ObservableObject, Identifiable {
+class SBOperation: Operation, ObservableObject, Identifiable, @unchecked Sendable {
     public let mainContext: NSManagedObjectContext
     public let threadedContext: NSManagedObjectContext
     

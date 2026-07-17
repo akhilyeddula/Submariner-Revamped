@@ -11,7 +11,7 @@ import os
 
 fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBLibraryPurgeOperation")
 
-class SBLibraryPurgeOperation: SBOperation {
+class SBLibraryPurgeOperation: SBOperation, @unchecked Sendable {
     fileprivate static let sizeFormatter = ByteCountFormatter()
     
     var tracks: [SBTrack]?

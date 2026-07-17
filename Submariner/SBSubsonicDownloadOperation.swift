@@ -12,7 +12,7 @@ import os
 
 fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBSubsonicDownloadOperation")
 
-@objc class SBSubsonicDownloadOperation: SBOperation, URLSessionDelegate, URLSessionTaskDelegate, URLSessionDownloadDelegate {
+@objc class SBSubsonicDownloadOperation: SBOperation, URLSessionDelegate, URLSessionTaskDelegate, URLSessionDownloadDelegate, @unchecked Sendable {
     private let track: SBTrack
     
     @objc init!(managedObjectContext mainContext: NSManagedObjectContext!, trackID: NSManagedObjectID) {
