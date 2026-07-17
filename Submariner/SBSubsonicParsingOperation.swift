@@ -730,6 +730,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
     private func fetchDirectory(id: String) -> SBDirectory? {
         let fetchRequest = NSFetchRequest<SBDirectory>(entityName: "Directory")
         fetchRequest.predicate = NSPredicate(format: "(itemId == %@) && (server == %@)", id, server)
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -738,6 +739,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
     private func fetchGroup(groupName: String) -> SBGroup? {
         let fetchRequest = NSFetchRequest<SBGroup>(entityName: "Group")
         fetchRequest.predicate = NSPredicate(format: "(itemName == %@) && (server == %@)", groupName, server)
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -746,6 +748,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
     private func fetchArtist(id: String) -> SBArtist? {
         let fetchRequest = NSFetchRequest<SBArtist>(entityName: "Artist")
         fetchRequest.predicate = NSPredicate(format: "(itemId == %@) && (server == %@)", id, server)
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -754,6 +757,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
     private func fetchArtist(name: String) -> SBArtist? {
         let fetchRequest = NSFetchRequest<SBArtist>(entityName: "Artist")
         fetchRequest.predicate = NSPredicate(format: "(itemName == %@) && (server == %@)", name, server)
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -771,6 +775,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
             // for the workaround used.
             fetchRequest.predicate = NSPredicate(format: "(itemId == %@) && SUBQUERY(tracks, $X, $X.server == %@).@count == tracks.@count", id, server)
         }
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -783,6 +788,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
         } else {
             fetchRequest.predicate = NSPredicate(format: "(itemName == %@) && SUBQUERY(tracks, $X, $X.server == %@).@count == tracks.@count", name, server)
         }
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -792,6 +798,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
         let fetchRequest = NSFetchRequest<SBCover>(entityName: "Cover")
         // XXX: server on predicate here?
         fetchRequest.predicate = NSPredicate(format: "(itemId == %@)", coverID)
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -804,6 +811,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
         } else {
             fetchRequest.predicate = NSPredicate(format: "(server == %@) && (itemId == %@)", server, id)
         }
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -812,6 +820,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
     private func fetchPlaylist(id: String) -> SBPlaylist? {
         let fetchRequest = NSFetchRequest<SBPlaylist>(entityName: "Playlist")
         fetchRequest.predicate = NSPredicate(format: "(itemId == %@) && (server == %@)", id, server)
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -820,6 +829,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
     private func fetchPlaylist(name: String) -> SBPlaylist? {
         let fetchRequest = NSFetchRequest<SBPlaylist>(entityName: "Playlist")
         fetchRequest.predicate = NSPredicate(format: "(resourceName == %@) && (server == %@)", name, server)
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -828,6 +838,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
     private func fetchPodcast(id: String) -> SBPodcast? {
         let fetchRequest = NSFetchRequest<SBPodcast>(entityName: "Podcast")
         fetchRequest.predicate = NSPredicate(format: "(itemId == %@) && (server == %@)", id, server)
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -836,6 +847,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
     private func fetchEpisode(id: String) -> SBEpisode? {
         let fetchRequest = NSFetchRequest<SBEpisode>(entityName: "Episode")
         fetchRequest.predicate = NSPredicate(format: "(itemId == %@) && (server == %@)", id, server)
+        fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         
         return results?.first
@@ -1137,9 +1149,6 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate {
         }
         if let musicBrainzId = attributes["musicBrainzId"] {
             track.musicBrainzId = musicBrainzId
-        }
-        if let explicit = attributes["explicitStatus"] {
-            track.explicit = explicit
         }
         if let explicit = attributes["explicitStatus"] {
             track.explicit = explicit

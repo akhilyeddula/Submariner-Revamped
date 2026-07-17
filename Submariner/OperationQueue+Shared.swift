@@ -21,4 +21,10 @@ import Foundation
         queue.maxConcurrentOperationCount = 1
         return queue
     }()
+    
+    @objc static var sharedCoverQueue = {
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 8
+        return queue
+    }()
 }

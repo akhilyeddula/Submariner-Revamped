@@ -215,7 +215,7 @@ public class SBServer: SBResource {
     
     // #MARK: - Custom Accessors (Keychain Support)
     
-    static private var cachedPasswords: [SBServer.ID: String] = [:]
+    static private var cachedPasswords: [NSManagedObjectID: String] = [:]
     
     @objc var password: String? {
         get {
@@ -225,42 +225,51 @@ public class SBServer: SBResource {
                primitivePassword != "" {
                 // setting it will null it out and set cachedPassword
                 self.password = primitivePassword
-                ret = SBServer.cachedPasswords[self.id]
-            } else if let cachedPassword = SBServer.cachedPasswords[self.id] {
-                ret = cachedPassword
-            } else if let urlString = self.url,
-                      let url = URL.init(string: urlString),
-                      let username = self.username,
-                      let host = url.host {
-                let attribs: [CFString: Any] = [
-                    kSecClass: kSecClassInternetPassword,
-                    kSecAttrServer: host,
-                    kSecAttrAccount: username,
-                    kSecAttrPath: "/",
-                    kSecAttrPort: url.portWithHTTPFallback,
-                    kSecAttrProtocol: url.keychainProtocol,
-                    kSecMatchLimit: kSecMatchLimitOne,
-                    kSecReturnData: NSNumber.init(booleanLiteral: true),
-                    kSecReturnAttributes: NSNumber.init(booleanLiteral: true)
-                ]
-                var results: AnyObject? = nil
-                logger.info("SBServer.password getter: Getting internet keychain for \(url.absoluteString) user \(username)")
-                let keychainStatus = SecItemCopyMatching(attribs as CFDictionary, &results)
-                if keychainStatus == errSecItemNotFound {
-                    // ok to get unlike other errors
-                    logger.info("SBServer.password getter: Keychain item not found")
-                    ret = nil
-                } else if keychainStatus != errSecSuccess {
-                    let error = NSError(domain: NSOSStatusErrorDomain, code: Int(keychainStatus))
-                    logger.error("SBServer.password getter: Keychain error \(error, privacy: .public)")
-                    DispatchQueue.main.async {
-                        NSApp.presentError(error)
+                ret = synchronized(SBServer.self) {
+                    SBServer.cachedPasswords[self.objectID]
+                }
+            } else {
+                let cachedPassword = synchronized(SBServer.self) {
+                    SBServer.cachedPasswords[self.objectID]
+                }
+                if let cachedPassword = cachedPassword {
+                    ret = cachedPassword
+                } else if let urlString = self.url,
+                          let url = URL.init(string: urlString),
+                          let username = self.username,
+                          let host = url.host {
+                    let attribs: [CFString: Any] = [
+                        kSecClass: kSecClassInternetPassword,
+                        kSecAttrServer: host,
+                        kSecAttrAccount: username,
+                        kSecAttrPath: "/",
+                        kSecAttrPort: url.portWithHTTPFallback,
+                        kSecAttrProtocol: url.keychainProtocol,
+                        kSecMatchLimit: kSecMatchLimitOne,
+                        kSecReturnData: NSNumber.init(booleanLiteral: true),
+                        kSecReturnAttributes: NSNumber.init(booleanLiteral: true)
+                    ]
+                    var results: AnyObject? = nil
+                    logger.info("SBServer.password getter: Getting internet keychain for \(url.absoluteString) user \(username)")
+                    let keychainStatus = SecItemCopyMatching(attribs as CFDictionary, &results)
+                    if keychainStatus == errSecItemNotFound {
+                        // ok to get unlike other errors
+                        logger.info("SBServer.password getter: Keychain item not found")
+                        ret = nil
+                    } else if keychainStatus != errSecSuccess {
+                        let error = NSError(domain: NSOSStatusErrorDomain, code: Int(keychainStatus))
+                        logger.error("SBServer.password getter: Keychain error \(error, privacy: .public)")
+                        DispatchQueue.main.async {
+                            NSApp.presentError(error)
+                        }
+                    } else if let resultsDict = results as? [CFString: Any],
+                              let passwordData = resultsDict[kSecValueData] as? Data { // success
+                        logger.info("SBServer.password getter: Successfully got the password")
+                        ret = String.init(data: passwordData, encoding: .utf8)
+                        synchronized(SBServer.self) {
+                            SBServer.cachedPasswords[self.objectID] = ret
+                        }
                     }
-                } else if let resultsDict = results as? [CFString: Any],
-                          let passwordData = resultsDict[kSecValueData] as? Data { // success
-                    logger.info("SBServer.password getter: Successfully got the password")
-                    ret = String.init(data: passwordData, encoding: .utf8)
-                    SBServer.cachedPasswords[self.id] = ret
                 }
             }
             self.didAccessValue(forKey: "password")
@@ -269,16 +278,20 @@ public class SBServer: SBResource {
         set {
             self.willChangeValue(forKey: "password")
             // XXX: should we invalidate the stored pw?
-            SBServer.cachedPasswords.removeValue(forKey: self.id)
+            synchronized(SBServer.self) {
+                SBServer.cachedPasswords.removeValue(forKey: self.objectID)
+            }
 
             // decompose URL
             if self.url != nil && self.username != nil {
                 // don't do the keychain update here anymore
-                SBServer.cachedPasswords[self.id] = newValue
+                synchronized(SBServer.self) {
+                    SBServer.cachedPasswords[self.objectID] = newValue
+                }
                 // clear out the remnant of Core Data stored password
                 self.setPrimitiveValue("", forKey: "password")
             }
-            self.willChangeValue(forKey: "password")
+            self.didChangeValue(forKey: "password")
         }
     }
     
@@ -449,7 +462,7 @@ public class SBServer: SBResource {
     
     func getCover(id: String, for albumID: String?) {
         let request = SBSubsonicRequestOperation(server: self, request: .getCoverArt(id: id, forAlbumId: albumID))
-        OperationQueue.sharedServerQueue.addOperation(request)
+        OperationQueue.sharedCoverQueue.addOperation(request)
     }
     
     @objc func getAlbumListFor(type: SBAlbumListType) {

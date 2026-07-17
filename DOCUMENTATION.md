@@ -1,0 +1,66 @@
+# Submariner — Technical Documentation
+
+This document describes configuration parameters, architecture decisions, and operational
+details for developers and contributors.
+
+---
+
+## Configuration Defaults
+
+These values are registered in `SBAppDelegate.init()` via `UserDefaults.standard.register(defaults:)`.
+
+### Cover Art
+
+| Key | Default | Type | Description |
+|-----|---------|------|-------------|
+| `MaxCoverSize` | `300` | Integer | Maximum pixel dimension (width and height) for cover art thumbnails requested from the server via the Subsonic `getCoverArt` API. The server scales the original cover art to fit within this size. A value of `300` means covers are requested at 300×300 pixels. Set to `0` to request the full-resolution original (not recommended). |
+| `coverSize` | `0.75` | Float | Controls the display size of album cover thumbnails in the UI grid. This is a scale factor, not a pixel value. |
+
+### Playback
+
+| Key | Default | Type | Description |
+|-----|---------|------|-------------|
+| `maxBitRate` | `0` | Integer | Maximum bitrate (in kbps) for streaming. `0` means no limit (server decides). Passed to the Subsonic `stream.view` API. |
+| `playerVolume` | `0.5` | Float | Initial player volume (0.0 to 1.0). |
+| `enableCacheStreaming` | `true` | Bool | When true, tracks are downloaded to the local cache while streaming. |
+| `deleteAfterPlay` | `false` | Bool | When true, cached tracks are deleted after playback completes. |
+| `scrobbleToServer` | `true` | Bool | When true, playback events are scrobbled to the server. |
+| `playRate` | `1.0` | Float | Playback speed multiplier. |
+| `SkipIncrement` | `5.0` | Float | Number of seconds to skip forward/backward with rewind/fast-forward. |
+
+### UI
+
+| Key | Default | Type | Description |
+|-----|---------|------|-------------|
+| `albumSortOrder` | `"OldestFirst"` | String | Sort order for album lists. Options: `"OldestFirst"`, or any other value for alphabetical. |
+| `playerBehavior` | `1` | Integer | Controls player behavior mode. |
+
+### Server
+
+| Key | Default | Type | Description |
+|-----|---------|------|-------------|
+| `clientIdentifier` | `"submariner"` | String | Client identifier sent with all Subsonic API requests. |
+| `apiVersion` | `"1.16.1"` | String | Subsonic API version used in requests. |
+
+---
+
+## Operation Queues
+
+Submariner uses three operation queues for background work:
+
+| Queue | Max Concurrent | Purpose |
+|-------|---------------|---------|
+| `sharedServerQueue` | 1 (serial) | General Subsonic API requests (artist/album/track metadata, playlists, etc.) and XML parsing operations. Serial to prevent Core Data race conditions. |
+| `sharedCoverQueue` | 8 (concurrent) | Cover art (`getCoverArt`) HTTP downloads only. Concurrent because each download is independent. The XML parsing that follows still goes through `sharedServerQueue`. |
+| `sharedDownloadQueue` | 1 (serial) | Track downloads and imports. Serial to avoid saturating the user's bandwidth. |
+
+### Why Cover Art Uses a Separate Queue
+
+Cover art fetches are pure HTTP downloads with no dependency on other requests. By running them on a dedicated concurrent queue, multiple covers load simultaneously instead of waiting behind metadata requests. The concurrency limit of 8 prevents overwhelming the server. Servers that rate-limit (HTTP 429) will have their requests automatically retried after the `Retry-After` delay.
+
+---
+
+## Known Limitations
+
+- **Cover art resolution:** Covers are requested at the `MaxCoverSize` (300px) resolution. For Retina displays, this means covers may appear slightly soft when displayed at sizes larger than 150×150 logical points. A future enhancement could request at 2× the display size.
+- **Serial server queue:** The main server queue is serial (max 1 concurrent operation) to avoid Core Data threading issues. This means metadata fetches are still serialized. Increasing concurrency requires careful Core Data context management.

@@ -99,19 +99,19 @@ class SBSubsonicRequestOperation: SBOperation {
                     let retryAfter = response.value(forHTTPHeaderField: "Retry-After")
                     logger.info("Retrying w/ Retry-After value \(retryAfter ?? "<nil>")")
 
+                    let delay: TimeInterval
                     if let retryAfter = retryAfter,
                        let specificDate = retryAfter.dateTimeFromHTTP() {
-                        _ = Timer(fire: specificDate, interval: 0, repeats: false) { timer in
-                            self.request(url: url, type: type, customization: customization)
-                            timer.invalidate()
-                        }
+                        delay = max(specificDate.timeIntervalSinceNow, 1)
                     } else {
                         // handle if Retry-After is valid, invalid, or missing
-                        let seconds = TimeInterval(retryAfter ?? "5") ?? 5
-                        _ = Timer(timeInterval: seconds, repeats: false) { timer in
-                            self.request(url: url, type: type, customization: customization)
-                            timer.invalidate()
-                        }
+                        delay = TimeInterval(retryAfter ?? "5") ?? 5
+                    }
+                    // Use DispatchQueue instead of Timer because this completion handler
+                    // runs on a background thread with no run loop. Timer would need a
+                    // running RunLoop to fire, which doesn't exist here.
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) {
+                        self.request(url: url, type: type, customization: customization)
                     }
                     return
                 case 200: // OK, continue
@@ -173,6 +173,10 @@ class SBSubsonicRequestOperation: SBOperation {
             endpoint = "getLicense"
         case .getCoverArt(id: let id, forAlbumId: let albumId):
             parameters["id"] = id
+            let maxCoverSize = UserDefaults.standard.integer(forKey: "MaxCoverSize")
+            if maxCoverSize > 0 {
+                parameters["size"] = String(maxCoverSize)
+            }
             endpoint = "getCoverArt"
             customization = { operation in
                 operation.currentCoverID = id
