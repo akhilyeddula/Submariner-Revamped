@@ -35,8 +35,6 @@ extension NSNotification.Name {
     var playerStatusObserver: NSKeyValueObservation?
     var playRateObserver: NSKeyValueObservation?
     
-    private var currentResourceLoaderDelegate: SBResourceLoaderDelegate?
-    
     private override init() {
         super.init()
         
@@ -645,32 +643,15 @@ extension NSNotification.Name {
                 }
             }
             
-            var assetURL = url
-            if !url.isFileURL {
-                var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-                if components?.scheme == "http" {
-                    components?.scheme = "sbhttp"
-                } else if components?.scheme == "https" {
-                    components?.scheme = "sbhttps"
-                }
-                if let modifiedURL = components?.url {
-                    assetURL = modifiedURL
-                }
-            }
+            let asset = AVURLAsset(url: url, options: options)
             
-            let asset = AVURLAsset(url: assetURL, options: options)
-            
-            if !url.isFileURL {
-                let contentType = track.macOSCompatibleContentType() ?? "audio/mpeg"
-                let delegate = SBResourceLoaderDelegate(contentType: contentType)
-                asset.resourceLoader.setDelegate(delegate, queue: DispatchQueue.main)
-                self.currentResourceLoaderDelegate = delegate
-            }
-            
-            let newItem = AVPlayerItem(asset: asset)
+            // Pass an empty array to automaticallyLoadedAssetKeys to prevent AVFoundation
+            // from synchronously downloading metadata (like duration/tracks) before playback starts.
+            let newItem = AVPlayerItem(asset: asset, automaticallyLoadedAssetKeys: [])
             newItem.preferredForwardBufferDuration = 1.0
             
             remotePlayer.replaceCurrentItem(with: newItem)
+            remotePlayer.automaticallyWaitsToMinimizeStalling = false
             remotePlayer.volume = volume
             remotePlayer.play()
             if #unavailable(macOS 13) {
