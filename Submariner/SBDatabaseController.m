@@ -434,12 +434,12 @@
                         
             // expand LIBRARY section
             NSPredicate *predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Library"];
-            SBLibrary *section = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
+            SBSection *section = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
             if(section != nil)
                 [sourceList expandURIs:[NSArray arrayWithObject:[[[section objectID] URIRepresentation] absoluteString]]];
             
             predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Playlists"];
-            section = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
+            section = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
             if(section != nil)
                 [sourceList expandURIs:[NSArray arrayWithObject:[[[section objectID] URIRepresentation] absoluteString]]];
             
@@ -449,7 +449,7 @@
             [resourcesController removeObserver:self forKeyPath:@"content"];
 			
 			// load a pdemo server
-			SBSection *serversSection = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
+			SBSection *serversSection = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
 			
 			[sourceList expandURIs:[NSArray arrayWithObject:[[[serversSection objectID] URIRepresentation] absoluteString]]];
 			[self.managedObjectContext save:nil];
@@ -475,7 +475,7 @@
 
 - (IBAction)createDemoServer:(id)sender {
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Servers"];
-    SBSection *serversSection = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
+    SBSection *serversSection = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
     // These values aren't defined in the Core Data model.
     SBServer *s = [SBServer insertInManagedObjectContext:self.managedObjectContext];
     [s setResourceName:@"Subsonic Demo"];
@@ -569,7 +569,7 @@
 
 - (IBAction)addPlaylist:(id)sender {
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Playlists"];
-    SBSection *playlistsSection = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
+    SBSection *playlistsSection = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
     
     SBPlaylist *newPlaylist = [SBPlaylist insertInManagedObjectContext:self.managedObjectContext];
     [newPlaylist setResourceName:@"New Playlist"];
@@ -601,7 +601,7 @@
 
 - (IBAction)addPlaylistFromTracklist:(id)sender {
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Playlists"];
-    SBSection *playlistsSection = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
+    SBSection *playlistsSection = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
     
     SBPlaylist *newPlaylist = [SBPlaylist insertInManagedObjectContext:self.managedObjectContext];
     [newPlaylist setResourceName:@"New Saved Tracklist"];
@@ -636,7 +636,7 @@
     [sourceList deselectAll:sender];
     
     NSPredicate *predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Servers"];
-    SBSection *serversSection = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
+    SBSection *serversSection = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:nil];
     
     SBServer *newServer = [SBServer insertInManagedObjectContext:self.managedObjectContext];
     [newServer setResourceName:@"New Server"];
@@ -1205,10 +1205,10 @@
     
     // library section
     predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Library"];
-    section = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
+    section = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
     if(!section) {
         predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"LIBRARY"];
-        section = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
+        section = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
         if (section) {
             [section setResourceName: @"Library"];
         } else {
@@ -1221,7 +1221,7 @@
     // library resource
     SBResource *resource = nil;
     predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Music"];
-    library = [self.managedObjectContext fetchEntityNammed:@"Library" withPredicate:predicate error:&error];
+    library = (SBLibrary *)[self.managedObjectContext fetchEntityNammed:@"Library" withPredicate:predicate error:&error];
     if(!library) {
         library = [SBLibrary insertInManagedObjectContext:self.managedObjectContext];
         [library setResourceName:@"Music"];
@@ -1232,7 +1232,7 @@
     
     // DOWNLOADS resource
     predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Downloads"];
-    resource = [self.managedObjectContext fetchEntityNammed:@"Downloads" withPredicate:predicate error:&error];
+    resource = (SBResource *)[self.managedObjectContext fetchEntityNammed:@"Downloads" withPredicate:predicate error:&error];
     if(!resource) {
         resource = [SBDownloads insertInManagedObjectContext:self.managedObjectContext];
         [resource setResourceName:@"Downloads"];
@@ -1243,10 +1243,10 @@
     
     // playlist section
     predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Playlists"];
-    section = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
+    section = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
     if(!section) {
         predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"PLAYLISTS"];
-        section = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
+        section = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
         if (section) {
             [section setResourceName: @"Playlists"];
         } else {
@@ -1258,10 +1258,10 @@
     
     // servers section
     predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"Servers"];
-    section = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
+    section = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
     if(!section) {
         predicate = [NSPredicate predicateWithFormat:@"(resourceName == %@)", @"SERVERS"];
-        section = [self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
+        section = (SBSection *)[self.managedObjectContext fetchEntityNammed:@"Section" withPredicate:predicate error:&error];
         if (section) {
             [section setResourceName: @"Servers"];
         } else {

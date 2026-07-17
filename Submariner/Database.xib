@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="24412" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
+<document type="com.apple.InterfaceBuilder3.Cocoa.XIB" version="3.0" toolsVersion="24765" targetRuntime="MacOSX.Cocoa" propertyAccessControl="none" useAutolayout="YES">
     <dependencies>
-        <deployment identifier="macosx"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="24412"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.CocoaPlugin" version="24765"/>
         <capability name="Search Toolbar Item" minToolsVersion="12.0" minSystemVersion="11.0"/>
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
@@ -67,9 +66,9 @@
             <windowStyleMask key="styleMask" titled="YES" closable="YES" miniaturizable="YES" resizable="YES" fullSizeContentView="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="328" y="212" width="1280" height="700"/>
-            <rect key="screenRect" x="0.0" y="0.0" width="2560" height="1415"/>
+            <rect key="screenRect" x="0.0" y="0.0" width="1920" height="1050"/>
             <value key="minSize" type="size" width="720" height="480"/>
-            <view key="contentView" misplaced="YES" id="2">
+            <view key="contentView" id="2">
                 <rect key="frame" x="0.0" y="0.0" width="1280" height="700"/>
                 <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                 <subviews>
@@ -81,14 +80,14 @@
                                 <rect key="frame" x="0.0" y="0.0" width="273" height="700"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
                                 <subviews>
-                                    <scrollView focusRingType="none" borderType="none" autohidesScrollers="YES" horizontalLineScroll="28" horizontalPageScroll="10" verticalLineScroll="28" verticalPageScroll="10" usesPredominantAxisScrolling="NO" id="11">
+                                    <scrollView focusRingType="none" borderType="none" autohidesScrollers="YES" horizontalLineScroll="32" horizontalPageScroll="10" verticalLineScroll="32" verticalPageScroll="10" usesPredominantAxisScrolling="NO" id="11">
                                         <rect key="frame" x="0.0" y="0.0" width="273" height="700"/>
                                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                         <clipView key="contentView" drawsBackground="NO" id="cdO-el-ZLY">
                                             <rect key="frame" x="0.0" y="0.0" width="273" height="700"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <subviews>
-                                                <outlineView focusRingType="none" verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" tableStyle="sourceList" multipleSelection="NO" autosaveColumns="NO" autosaveName="SourceList" rowHeight="28" rowSizeStyle="systemDefault" viewBased="YES" floatsGroupRows="NO" indentationPerLevel="13" autosaveExpandedItems="YES" indentationMarkerFollowsCell="NO" outlineTableColumn="16" id="15">
+                                                <outlineView focusRingType="none" verticalHuggingPriority="750" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" tableStyle="sourceList" multipleSelection="NO" autosaveColumns="NO" autosaveName="SourceList" rowHeight="32" rowSizeStyle="systemDefault" viewBased="YES" floatsGroupRows="NO" indentationPerLevel="13" autosaveExpandedItems="YES" indentationMarkerFollowsCell="NO" outlineTableColumn="16" id="15">
                                                     <rect key="frame" x="0.0" y="0.0" width="273" height="700"/>
                                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                                     <size key="intercellSpacing" width="3" height="0.0"/>
@@ -182,10 +181,12 @@
                     <toolbarItem implicitItemIdentifier="NSToolbarSpaceItem" id="otC-h2-Pjt"/>
                     <toolbarItem implicitItemIdentifier="NSToolbarFlexibleSpaceItem" id="Jsx-Cl-TNf"/>
                     <toolbarItem implicitItemIdentifier="F5D6BCAC-00D0-4F36-BCA2-9E2D56606A99" explicitItemIdentifier="NSToolbarSidebarTrackingSeparatorItemIdentifier" label="Sidebar Separator" paletteLabel="Sidebar Separator" tag="-1" bordered="YES" id="urp-JS-CHY">
+                        <size key="minSize" width="24" height="24"/>
+                        <size key="maxSize" width="24" height="24"/>
                     </toolbarItem>
                     <toolbarItem implicitItemIdentifier="0E266961-1DCC-4AE8-AD1D-AD17E4D0C9DF" explicitItemIdentifier="SBTBProgressIndicator" label="Progress Indicator" paletteLabel="Progress Indicator" tag="-1" title="Progress Indicator" sizingBehavior="auto" navigational="YES" id="amK-dn-Tr2">
                         <nil key="toolTip"/>
-                        <progressIndicator key="view" horizontalHuggingPriority="750" verticalHuggingPriority="750" maxValue="100" displayedWhenStopped="NO" bezeled="NO" indeterminate="YES" controlSize="small" style="spinning" id="195">
+                        <progressIndicator key="view" wantsLayer="YES" horizontalHuggingPriority="750" verticalHuggingPriority="750" maxValue="100" displayedWhenStopped="NO" bezeled="NO" indeterminate="YES" controlSize="small" style="spinning" id="195">
                             <rect key="frame" x="44" y="14" width="16" height="16"/>
                             <autoresizingMask key="autoresizingMask"/>
                         </progressIndicator>
@@ -275,7 +276,7 @@
                     <toolbarItem implicitItemIdentifier="EE6E6CE1-FB9F-4853-A706-7715B7C05F13" explicitItemIdentifier="SBTBScrubber" label="Position" paletteLabel="Position" sizingBehavior="auto" id="xeN-ij-0rW">
                         <nil key="toolTip"/>
                         <slider key="view" verticalHuggingPriority="750" id="268">
-                            <rect key="frame" x="0.0" y="14" width="191" height="28"/>
+                            <rect key="frame" x="0.0" y="14" width="191" height="16"/>
                             <autoresizingMask key="autoresizingMask"/>
                             <sliderCell key="cell" enabled="NO" state="on" alignment="left" maxValue="100" tickMarkPosition="above" sliderType="linear" id="280"/>
                             <connections>
@@ -434,7 +435,7 @@
                             </searchFieldCell>
                         </searchField>
                     </searchToolbarItem>
-                    <toolbarItem implicitItemIdentifier="23EF07BA-560F-4224-899F-A74C5930D026" explicitItemIdentifier="SBTBAirPlay" label="AirPlay" paletteLabel="AirPlay" tag="-1" image="airplayaudio" catalog="system" bordered="YES" sizingBehavior="auto" id="nvk-gb-iuf">
+                    <toolbarItem implicitItemIdentifier="23EF07BA-560F-4224-899F-A74C5930D026" explicitItemIdentifier="SBTBAirPlay" label="AirPlay" paletteLabel="AirPlay" tag="-1" image="airplay.audio" catalog="system" bordered="YES" sizingBehavior="auto" id="nvk-gb-iuf">
                         <nil key="toolTip"/>
                         <customView key="view" id="QTs-3m-dC6" customClass="SBRoutePickerView" customModule="Submariner" customModuleProvider="target">
                             <rect key="frame" x="9" y="14" width="27" height="23"/>
@@ -495,7 +496,7 @@
             <windowStyleMask key="styleMask" titled="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="294" y="363" width="400" height="292"/>
-            <rect key="screenRect" x="0.0" y="0.0" width="2560" height="1415"/>
+            <rect key="screenRect" x="0.0" y="0.0" width="1920" height="1050"/>
             <value key="minSize" type="size" width="400" height="266"/>
             <view key="contentView" id="114">
                 <rect key="frame" x="0.0" y="0.0" width="400" height="292"/>
@@ -647,11 +648,11 @@ Gw
                         <rect key="frame" x="14" y="48" width="369" height="73"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                         <view key="contentView" id="XCc-S1-pek">
-                            <rect key="frame" x="4" y="5" width="361" height="53"/>
+                            <rect key="frame" x="0.0" y="0.0" width="369" height="61"/>
                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                             <subviews>
                                 <imageView id="326">
-                                    <rect key="frame" x="97" y="32" width="10" height="10"/>
+                                    <rect key="frame" x="97" y="40" width="10" height="10"/>
                                     <autoresizingMask key="autoresizingMask" flexibleMinY="YES"/>
                                     <imageCell key="cell" refusesFirstResponder="YES" alignment="left" animates="YES" image="NSStatusUnavailable" id="327"/>
                                     <connections>
@@ -659,7 +660,7 @@ Gw
                                     </connections>
                                 </imageView>
                                 <textField focusRingType="none" verticalHuggingPriority="750" id="328">
-                                    <rect key="frame" x="109" y="30" width="176" height="14"/>
+                                    <rect key="frame" x="109" y="38" width="184" height="14"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
                                     <textFieldCell key="cell" controlSize="small" scrollable="YES" lineBreakMode="clipping" selectable="YES" sendsActionOnEndEditing="YES" title="Invalid/Unknown License" id="329">
                                         <font key="font" metaFont="smallSystem"/>
@@ -671,7 +672,7 @@ Gw
                                     </connections>
                                 </textField>
                                 <datePicker verticalHuggingPriority="750" id="330">
-                                    <rect key="frame" x="281" y="26" width="73" height="27"/>
+                                    <rect key="frame" x="289" y="34" width="73" height="27"/>
                                     <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
                                     <datePickerCell key="cell" controlSize="small" refusesFirstResponder="YES" alignment="left" drawsBackground="NO" datePickerStyle="textField" id="331">
                                         <font key="font" metaFont="smallSystem"/>
@@ -686,7 +687,7 @@ Gw
                                     </connections>
                                 </datePicker>
                                 <textField focusRingType="none" verticalHuggingPriority="750" id="338">
-                                    <rect key="frame" x="95" y="6" width="261" height="17"/>
+                                    <rect key="frame" x="95" y="14" width="269" height="17"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES"/>
                                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" placeholderString="Undefined" id="339">
                                         <font key="font" metaFont="system"/>
@@ -698,7 +699,7 @@ Gw
                                     </connections>
                                 </textField>
                                 <textField focusRingType="none" verticalHuggingPriority="750" id="340">
-                                    <rect key="frame" x="36" y="30" width="55" height="16"/>
+                                    <rect key="frame" x="36" y="38" width="55" height="16"/>
                                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" alignment="right" title="License:" id="341">
                                         <font key="font" metaFont="system"/>
@@ -707,7 +708,7 @@ Gw
                                     </textFieldCell>
                                 </textField>
                                 <textField focusRingType="none" verticalHuggingPriority="750" id="336">
-                                    <rect key="frame" x="18" y="7" width="77" height="16"/>
+                                    <rect key="frame" x="18" y="15" width="77" height="16"/>
                                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                                     <textFieldCell key="cell" scrollable="YES" lineBreakMode="clipping" sendsActionOnEndEditing="YES" alignment="right" title="API Version:" id="337">
                                         <font key="font" metaFont="system"/>
@@ -733,7 +734,7 @@ Gw
             <windowStyleMask key="styleMask" titled="YES" closable="YES" miniaturizable="YES" resizable="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="485" y="393" width="412" height="124"/>
-            <rect key="screenRect" x="0.0" y="0.0" width="2560" height="1415"/>
+            <rect key="screenRect" x="0.0" y="0.0" width="1920" height="1050"/>
             <value key="minSize" type="size" width="412" height="124"/>
             <value key="maxSize" type="size" width="600" height="124"/>
             <view key="contentView" id="200">
@@ -896,7 +897,7 @@ DQ
     </objects>
     <resources>
         <image name="NSStatusUnavailable" width="16" height="16"/>
-        <image name="airplayaudio" catalog="system" width="15" height="15"/>
+        <image name="airplay.audio" catalog="system" width="15" height="15"/>
         <image name="backward" catalog="system" width="20" height="12"/>
         <image name="chevron.backward" catalog="system" width="10" height="14"/>
         <image name="chevron.forward" catalog="system" width="10" height="14"/>
