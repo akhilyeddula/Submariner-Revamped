@@ -28,7 +28,7 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
             "playerVolume": NSNumber(value: 0.5),
             "repeatMode": NSNumber(value: SBPlayer.RepeatMode.no.rawValue),
             "shuffle": NSNumber(value: false),
-            "enableCacheStreaming": NSNumber(value: true),
+            "enableCacheStreaming": NSNumber(value: false),
             "autoRefreshNowPlaying": NSNumber(value: false),
             "coverSize": NSNumber(value: 0.75),
             "maxBitRate": NSNumber(value: 0),

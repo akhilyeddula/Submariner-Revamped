@@ -42,6 +42,8 @@ Doing so isn't fatal (it's not a secret), but it is annoying for other contribut
 * Optimized playback startup time by caching auth parameters, deferring UI updates asynchronously, and adjusting AVPlayer buffering.
 * Improved cover art loading speed with an in-memory NSCache and shared URLSession connection reuse.
 * Drastically reduced playback initiation latency and eliminated network errors by intercepting AVPlayer requests with a custom AVAssetResourceLoaderDelegate.
+* Auto-caching of streamed tracks is now disabled by default; downloads are an explicit opt-in action.
+* Fixed first-play failure (`err=-12848`) when a track was partially downloaded — the player now falls back to the remote stream if the local file isn't fully written yet.
 
 ### Version 3.4
 

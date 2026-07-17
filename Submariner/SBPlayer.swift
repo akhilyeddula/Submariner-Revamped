@@ -616,13 +616,24 @@ extension NSNotification.Name {
     private func playRemote(track: SBTrack) -> Bool {
         remotePlayer.replaceCurrentItem(with: nil)
         
-        if let url = track.localTrack?.streamURL() ?? track.streamURL() {
+        // Only use a locally cached file if it exists and is fully written.
+        // A localTrack may exist in Core Data while the download is still in progress,
+        // resulting in a partially-written file that AVPlayer cannot open (err=-12848).
+        let resolvedLocalURL: URL? = track.localTrack?.streamURL().flatMap { url in
+            guard url.isFileURL else { return url }
+            let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+            let size = (attrs?[.size] as? Int) ?? 0
+            return size > 0 ? url : nil
+        }
+        
+        if let url = resolvedLocalURL ?? track.streamURL() {
             // XXX: Debug?
             if url.isFileURL {
                 logger.info("Playing local track at file: \(url, privacy: .public)")
             } else {
                 logger.info("Playing remote track via \(url.path, privacy: .public) at URL: \(url.absoluteString, privacy: .public)")
                 print("DEBUG: AVPlayer URL is \(url.absoluteString)")
+
             }
             
             var options: [String: Any] = [:]
