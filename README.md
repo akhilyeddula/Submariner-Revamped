@@ -1,3 +1,6 @@
+## Notice
+Forking this so I can add my own improvements to it. The Subsonic integration leaves some things to be desired. I will come back to this and work on it when I have some free time.
+
 # Submariner
 
 Submariner is a Subsonic client for Mac. Originally developed by Rafaël Warnault, it was no longer maintained, and in 2012, he released it under a 3-clause BSD license.
