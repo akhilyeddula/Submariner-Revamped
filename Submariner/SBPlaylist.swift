@@ -19,19 +19,30 @@ public class SBPlaylist: SBResource {
     
     override public class func keyPathsForValuesAffectingValue(forKey key: String) -> Set<String> {
         if key == "tracks" {
+            return Set(["trackURIs"])
+        } else if key == "trackURIs" {
             return Set(["trackIDs"])
-        } else if key == "trackIDs" {
-            return Set(["tracks"])
         }
         return super.keyPathsForValuesAffectingValue(forKey: key)
+    }
+    
+    @objc var trackURIs: [URL]? {
+        get {
+            return trackIDs as? [URL]
+        }
+        set {
+            willChangeValue(forKey: "trackIDs")
+            trackIDs = newValue as NSArray?
+            didChangeValue(forKey: "trackIDs")
+        }
     }
     
     @objc dynamic var tracks: [SBTrack]? {
         get {
             let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBPlaylist")
-            logger.info("Getting tracks for playlist \(self.resourceName ?? "<nil>"), trackIDs count: \(self.trackIDs?.count ?? 0)")
+            logger.info("Getting tracks for playlist \(self.resourceName ?? "<nil>"), trackIDs count: \(self.trackURIs?.count ?? 0)")
             // If tracks get deleted, compactMap means we can skip over them if they turn out to not exist anymore, without complicated schemes
-            return trackIDs?.compactMap { uri in
+            return trackURIs?.compactMap { uri in
                 if let moc = self.managedObjectContext {
                     if let oid = moc.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: uri) {
                         let track = moc.object(with: oid) as? SBTrack
@@ -52,40 +63,40 @@ public class SBPlaylist: SBResource {
         }
         set {
             if let tracks = newValue {
-                self.trackIDs = tracks.map { $0.objectID.uriRepresentation() }
+                self.trackURIs = tracks.map { $0.objectID.uriRepresentation() }
             }
         }
     }
     
     func add(track: SBTrack) {
         ensureTrackIDsNotNil()
-        var ids = trackIDs ?? []
+        var ids = trackURIs ?? []
         ids.append(track.objectID.uriRepresentation())
-        trackIDs = ids
+        trackURIs = ids
     }
     
     @objc(addTracks:) func add(tracks: [SBTrack]) {
         ensureTrackIDsNotNil()
-        var ids = trackIDs ?? []
+        var ids = trackURIs ?? []
         let additionalIDs = tracks.map { $0.objectID.uriRepresentation() }
         ids.append(contentsOf: additionalIDs)
-        trackIDs = ids
+        trackURIs = ids
     }
     
     func add(tracks: [SBTrack], at row: Int) {
         ensureTrackIDsNotNil()
-        var ids = trackIDs ?? []
+        var ids = trackURIs ?? []
         let additionalIDs = tracks.map { $0.objectID.uriRepresentation() }
         ids.insert(contentsOf: additionalIDs, at: row)
-        trackIDs = ids
+        trackURIs = ids
     }
     
     func remove(indices: IndexSet) {
-        trackIDs?.remove(atOffsets: indices)
+        trackURIs?.remove(atOffsets: indices)
     }
     
     @objc(moveIndices:toRow:) func moveTracks(fromOffsets indices: IndexSet, toOffset row: Int) -> IndexSet? {
-        return trackIDs?.moveReturningNewIndices(fromOffsets: indices, toOffset: row)
+        return trackURIs?.moveReturningNewIndices(fromOffsets: indices, toOffset: row)
     }
     
     // #MARK: - Core Data insert compatibility shim
@@ -96,8 +107,8 @@ public class SBPlaylist: SBResource {
     }
     
     private func ensureTrackIDsNotNil() {
-        if trackIDs == nil {
-            trackIDs = []
+        if trackURIs == nil {
+            trackURIs = []
         }
     }
     

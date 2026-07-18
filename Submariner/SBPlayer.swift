@@ -35,6 +35,8 @@ extension NSNotification.Name {
     var playerStatusObserver: NSKeyValueObservation?
     var playRateObserver: NSKeyValueObservation?
     
+    private var currentResourceLoaderDelegate: SBResourceLoaderDelegate?
+    
     private override init() {
         super.init()
         
@@ -643,11 +645,29 @@ extension NSNotification.Name {
                 }
             }
             
-            let asset = AVURLAsset(url: url, options: options)
+            var assetURL = url
+            if !url.isFileURL {
+                var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+                if components?.scheme == "http" {
+                    components?.scheme = "sbhttp"
+                } else if components?.scheme == "https" {
+                    components?.scheme = "sbhttps"
+                }
+                if let modifiedURL = components?.url {
+                    assetURL = modifiedURL
+                }
+            }
             
-            // Pass an empty array to automaticallyLoadedAssetKeys to prevent AVFoundation
-            // from synchronously downloading metadata (like duration/tracks) before playback starts.
-            let newItem = AVPlayerItem(asset: asset, automaticallyLoadedAssetKeys: [])
+            let asset = AVURLAsset(url: assetURL, options: options)
+            
+            if !url.isFileURL {
+                let contentType = track.macOSCompatibleContentType() ?? "audio/mpeg"
+                let delegate = SBResourceLoaderDelegate(contentType: contentType)
+                asset.resourceLoader.setDelegate(delegate, queue: DispatchQueue.main)
+                self.currentResourceLoaderDelegate = delegate
+            }
+            
+            let newItem = AVPlayerItem(asset: asset)
             newItem.preferredForwardBufferDuration = 1.0
             
             remotePlayer.replaceCurrentItem(with: newItem)

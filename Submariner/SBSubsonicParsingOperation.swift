@@ -372,7 +372,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
             }
             
             // empty it out so we can update from server
-            currentPlaylist?.trackIDs = []
+            currentPlaylist?.trackURIs = []
         default:
             logger.warning("Invalid request type \(String(describing: self.requestType)) for playlist element")
         }
@@ -713,9 +713,10 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         case .getPlaylists:
             postServerNotification(.SBSubsonicPlaylistsUpdated)
         case .getPlaylist(_):
+            if let playlist = currentPlaylist {
+                NotificationCenter.default.post(name: .SBSubsonicPlaylistUpdated, object: playlist.objectID)
+            }
             currentPlaylist = nil
-            // Notify the UI to reload so the freshly-fetched tracks are shown.
-            postServerNotification(.SBSubsonicPlaylistsUpdated)
         case .createPlaylist(_, _):
             postServerNotification(.SBSubsonicPlaylistsCreated)
         case .getNowPlaying:
@@ -1375,7 +1376,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         
         var trackURIs = Set<URL>()
         for playlist in playlists {
-            if let ids = playlist.trackIDs {
+            if let ids = playlist.trackURIs {
                 trackURIs.formUnion(ids)
             }
         }

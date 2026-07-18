@@ -10,7 +10,7 @@ import Cocoa
 import SwiftUI
 
 @objc class SBOnboardingController: SBViewController {
-    @objc static override func nibName() -> String! {
+    @objc override class func nibName() -> String? {
         nil
     }
     

@@ -16,7 +16,7 @@ import Cocoa
     
     private var notificationObserver: Any?
     
-    override class func nibName() -> String! {
+    override class func nibName() -> String? {
         "Tracklist"
     }
     
@@ -68,7 +68,7 @@ import Cocoa
         }
     }
     
-    @IBAction func cleanTracklist(_ sender: Any) {
+    @IBAction func cleanTracklist(_ sender: Any?) {
         SBPlayer.sharedInstance().clear()
     }
     

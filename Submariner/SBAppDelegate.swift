@@ -161,7 +161,9 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
     }
     
     func application(_ application: NSApplication, open urls: [URL]) {
-        databaseController.openImportAlert(databaseController.window, files: urls)
+        if let window = databaseController.window {
+            _ = databaseController.openImportAlert(window, files: urls)
+        }
     }
     
     // #MARK: - Application Files/Directories
@@ -389,6 +391,6 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
     // #MARK: - UI Validation
     
     func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
-        return databaseController.validate(item)
+        return databaseController.validateUserInterfaceItem(item)
     }
 }

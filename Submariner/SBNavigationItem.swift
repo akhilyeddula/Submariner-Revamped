@@ -9,39 +9,39 @@
 import Cocoa
 
 @objc class SBServerPodcastsNavigationItem: SBServerNavigationItem {
-    override var identifier: NSString { "ServerPodcasts" }
+    override var identifier: String { "ServerPodcasts" }
 }
 
 @objc class SBServerDirectoriesNavigationItem: SBServerNavigationItem {
-    override var identifier: NSString { "ServerDirectories" }
+    override var identifier: String { "ServerDirectories" }
 }
 
 @objc class SBServerHomeNavigationItem: SBServerNavigationItem {
-    override var identifier: NSString { "ServerHome" }
+    override var identifier: String { "ServerHome" }
 }
 
 @objc class SBServerLibraryNavigationItem: SBServerNavigationItem {
-    override var identifier: NSString { "ServerLibrary" }
+    override var identifier: String { "ServerLibrary" }
     
     @objc var selectedMusicItem: SBMusicItem?
 }
 
 @objc class SBServerSearchNavigationItem: SBServerNavigationItem {
-    override var identifier: NSString { "ServerSearch" }
+    override var identifier: String { "ServerSearch" }
     
     var query: SBSearchResult.QueryType
     
     // HACK: Workaround for ObjC not having sum types (remove when we can just expose query to DatabaseController)
-    @objc var searchQuery: NSString? {
+    @objc var searchQuery: String? {
         if case let .search(query) = self.query {
-            return query as NSString
+            return query
         }
         return nil
     }
     
-    @objc var topTracksForArtist: NSString? {
+    @objc var topTracksForArtist: String? {
         if case let .topTracksFor(artistName) = self.query {
-            return artistName as NSString
+            return artistName
         }
         return nil
     }
@@ -82,7 +82,7 @@ import Cocoa
 }
 
 @objc class SBPlaylistNavigationItem: SBNavigationItem {
-    override var identifier: NSString { "Playlist" }
+    override var identifier: String { "Playlist" }
     
     @objc var playlist: SBPlaylist
     
@@ -92,25 +92,25 @@ import Cocoa
 }
 
 @objc class SBLocalSearchNavigationItem: SBNavigationItem {
-    override var identifier: NSString { "MusicSearch" }
+    override var identifier: String { "MusicSearch" }
     
-    @objc var query: NSString
+    @objc var query: String
     
-    @objc init(query: NSString) {
+    @objc init(query: String) {
         self.query = query
     }
 }
 
 @objc class SBDownloadsNavigationItem: SBNavigationItem {
-    override var identifier: NSString { "Downloads" }
+    override var identifier: String { "Downloads" }
 }
 
 @objc class SBOnboardingNavigationItem: SBNavigationItem {
-    override var identifier: NSString { "Onboarding" }
+    override var identifier: String { "Onboarding" }
 }
 
 @objc class SBLocalMusicNavigationItem: SBNavigationItem {
-    override var identifier: NSString { "Music" }
+    override var identifier: String { "Music" }
     
     @objc var selectedMusicItem: SBMusicItem?
 }
@@ -124,5 +124,5 @@ import Cocoa
 }
 
 @objc class SBNavigationItem: NSObject {
-    @objc var identifier: NSString { "" }
+    @objc var identifier: String { "" }
 }

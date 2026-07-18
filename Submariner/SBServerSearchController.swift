@@ -55,7 +55,7 @@ import Cocoa
     var boundsObserver: NSObjectProtocol?
     var resultObserver: NSObjectProtocol?
     
-    override class func nibName() -> String! {
+    override class func nibName() -> String? {
         "ServerSearch"
     }
     
@@ -156,7 +156,7 @@ import Cocoa
                 return
             }
             let navItem = SBServerSearchNavigationItem(server: self.server, queryType: .search(query: ""))
-            databaseController.navigate(to: navItem)
+            databaseController?.navigate(to: navItem)
         }
     }
     
@@ -169,7 +169,7 @@ import Cocoa
                 return
             }
             let navItem = SBServerSearchNavigationItem(server: self.server, queryType: .starred)
-            databaseController.navigate(to: navItem)
+            databaseController?.navigate(to: navItem)
         }
     }
 }

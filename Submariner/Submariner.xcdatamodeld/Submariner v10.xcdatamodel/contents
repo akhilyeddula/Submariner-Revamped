@@ -117,7 +117,7 @@
         <attribute name="comment" optional="YES" attributeType="String"/>
         <attribute name="isPublic" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
         <attribute name="itemId" optional="YES" attributeType="String" elementID="id"/>
-        <attribute name="trackIDs" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[URL]"/>
+        <attribute name="trackIDs" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="NSArray"/>
         <relationship name="server" optional="YES" minCount="1" maxCount="1" deletionRule="Nullify" destinationEntity="Server" inverseName="playlists" inverseEntity="Server"/>
         <fetchIndex name="Playlist_byServerIndex">
             <fetchIndexElement property="server" type="Binary" order="ascending"/>

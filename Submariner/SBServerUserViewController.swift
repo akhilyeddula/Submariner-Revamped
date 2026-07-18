@@ -63,7 +63,7 @@ extension NSNotification.Name {
     
     // #MARK: - View Management
     
-    override class func nibName() -> String! {
+    override class func nibName() -> String? {
         nil
     }
     

@@ -13,7 +13,7 @@ import SwiftUI
     @Published var activities: [SBOperation] = []
     
     // it's ok to use nil if we aren't rehydrating a nib, SBViewController doesn't mind?
-    override class func nibName() -> String! {
+    override class func nibName() -> String? {
         nil
     }
     

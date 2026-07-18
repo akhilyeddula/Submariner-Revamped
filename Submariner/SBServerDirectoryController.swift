@@ -15,7 +15,7 @@ import os
 fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBServerDirectoryController")
 
 @objc class SBServerDirectoryController: SBViewController, ObservableObject {
-    @objc static override func nibName() -> String! {
+    @objc override class func nibName() -> String? {
         nil
     }
     
