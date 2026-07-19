@@ -36,7 +36,7 @@ import SwiftUI
                         .font(.largeTitle)
                         .padding(.top, 1)
                         .padding(.bottom, 0.25)
-                    Text("Get started by connecting to a server, or manage your local music.")
+                    Text("Get started by connecting to a Subsonic or Navidrome server.")
                         .font(.title2)
                         .foregroundColor(.secondary)
                         .padding(.bottom, 1)
@@ -68,14 +68,6 @@ import SwiftUI
                     .controlSize(.large)
                     .font(.title3)
                     
-                    Button {
-                        onboardingController.databaseController!.openAudioFiles(self)
-                    } label: {
-                        Text("Add Music to Local Library")
-                            .frame(width: 250, height: 40)
-                    }
-                    .controlSize(.large)
-                    .font(.title3)
                 }
                 .padding(50)
                 .frame(maxWidth: .infinity)

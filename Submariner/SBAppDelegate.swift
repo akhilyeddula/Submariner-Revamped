@@ -13,6 +13,7 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
 
 @main
 @objc(SBAppDelegate) class SBAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSUserInterfaceValidations {
+    private static let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     
     // #MARK: - Initialization
     
@@ -37,7 +38,6 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
             "deleteAfterPlay": NSNumber(value: false),
             "SkipIncrement": NSNumber(value: 5.0),
             "albumSortOrder": "OldestFirst",
-            "canLinkImport": NSNumber(value: false),
             "playRate": NSNumber(value: 1.0),
         ]
         UserDefaults.standard.register(defaults: defaults)
@@ -79,16 +79,40 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
         // if we were doing the migration manually we could try to convert the ID, but we don't have this control with
         // NSMigratePersistentStoresAutomaticallyOption.
         let newURL = SBAppDelegate.storeFileName
-        if let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(type: .sqlite, at: newURL),
+        if !Self.isRunningTests,
+           let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(type: .sqlite, at: newURL),
            !self.managedObjectModel.isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata) {
-            // SBDatabaseController defaults to local music for now
             UserDefaults.standard.removeObject(forKey: "LastViewedResource")
         }
         // we no longer migrate from Submariner 1.x stores. use 3.1.1 or older first beforehand
-        _ = try! self.persistentStoreCoordinator.addPersistentStore(type: .sqlite,
-                                                                    configuration: nil,
-                                                                    at: newURL,
-                                                                    options: storeOpts)
+        do {
+            if Self.isRunningTests {
+                _ = try self.persistentStoreCoordinator.addPersistentStore(
+                    type: .inMemory,
+                    configuration: nil,
+                    at: URL(fileURLWithPath: "/dev/null")
+                )
+            } else {
+                _ = try self.persistentStoreCoordinator.addPersistentStore(type: .sqlite,
+                                                                            configuration: nil,
+                                                                            at: newURL,
+                                                                            options: storeOpts)
+            }
+        } catch {
+            let alert = NSAlert(error: error)
+            alert.messageText = "The Submariner Library Could Not Be Opened"
+            alert.informativeText += "\n\nSubmariner will open a temporary library for this session. Your existing library has not been deleted."
+            alert.runModal()
+            do {
+                _ = try self.persistentStoreCoordinator.addPersistentStore(
+                    type: .inMemory,
+                    configuration: nil,
+                    at: URL(fileURLWithPath: "/dev/null")
+                )
+            } catch {
+                assertionFailure("Unable to create fallback Core Data store: \(error)")
+            }
+        }
         
         // #MARK: Init Core Data (managed object store)
         // must be main queue for SwiftUI
@@ -97,10 +121,12 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
         self.managedObjectContext.automaticallyMergesChangesFromParent = true
         
         // #MARK: Run cleanup steps
-        let cleanupOrphansOperation = SBLibraryCleanupOrphansOperation(managedObjectContext: self.managedObjectContext)
-        OperationQueue.sharedServerQueue.addOperation(cleanupOrphansOperation)
-        let cleanupCoverPathsOperation = SBLibraryCleanupCoverPathsOperation(managedObjectContext: self.managedObjectContext)
-        OperationQueue.sharedServerQueue.addOperation(cleanupCoverPathsOperation)
+        if !Self.isRunningTests {
+            let cleanupOrphansOperation = SBLibraryCleanupOrphansOperation(managedObjectContext: self.managedObjectContext)
+            OperationQueue.sharedServerQueue.addOperation(cleanupOrphansOperation)
+            let cleanupCoverPathsOperation = SBLibraryCleanupCoverPathsOperation(managedObjectContext: self.managedObjectContext)
+            OperationQueue.sharedServerQueue.addOperation(cleanupCoverPathsOperation)
+        }
         
         // #MARK: Init Window Controllers
         self.databaseController = SBDatabaseController(managedObjectContext: self.managedObjectContext)
@@ -114,7 +140,9 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
     }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        zoomDatabaseWindow(self)
+        if !Self.isRunningTests {
+            zoomDatabaseWindow(self)
+        }
     }
     
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -156,65 +184,57 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
     
     // XXX: this is called on launch, but is it needed?
     func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
-        zoomDatabaseWindow(self)
-        return false
-    }
-    
-    func application(_ application: NSApplication, open urls: [URL]) {
-        if let window = databaseController.window {
-            _ = databaseController.openImportAlert(window, files: urls)
+        if !Self.isRunningTests {
+            zoomDatabaseWindow(self)
         }
+        return false
     }
     
     // #MARK: - Application Files/Directories
     
-    @objc static var musicDirectory: URL {
-        let path = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).last!.appendingPathComponent("Submariner/Music")
-        if !FileManager.default.fileExists(atPath: path.path) {
-            do {
-                try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
-            } catch {
-                let alert = NSAlert()
-                alert.alertStyle = .critical
-                alert.messageText = "Failed to Create Directory"
-                alert.informativeText = "Submariner failed to create the music directory \"\(path)\"."
-                alert.runModal()
-                fatalError("Failed to create music directory at \(path)")
-            }
-        }
-        return path
-    }
-    
     @objc static var coverDirectory: URL {
-        let path = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).last!.appendingPathComponent("Submariner/Covers")
+        let path = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).last!.appendingPathComponent("Submariner/Covers")
+        let legacyPath = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).last!.appendingPathComponent("Submariner/Covers")
+        if !FileManager.default.fileExists(atPath: path.path), FileManager.default.fileExists(atPath: legacyPath.path) {
+            try? FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? FileManager.default.moveItem(at: legacyPath, to: path)
+        }
         if !FileManager.default.fileExists(atPath: path.path) {
             do {
                 try FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
             } catch {
-                let alert = NSAlert()
-                alert.alertStyle = .critical
-                alert.messageText = "Failed to Create Directory"
-                alert.informativeText = "Submariner failed to create the cover directory \"\(path)\"."
-                alert.runModal()
-                fatalError("Failed to create cover directory at \(path)")
+                logger.error("Failed to create cover directory at \(path.path, privacy: .public): \(error, privacy: .public)")
+                return legacyPath
             }
         }
         return path
     }
     
     static var storeFileName: URL {
-        let baseURL = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).last!.appendingPathComponent("Submariner")
-        let path = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).last!.appendingPathComponent("Submariner/Submariner Library.sqlite")
+        let baseURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).last!.appendingPathComponent("Submariner")
+        let path = baseURL.appendingPathComponent("Submariner Library.sqlite")
+        let legacyBaseURL = FileManager.default.urls(for: .musicDirectory, in: .userDomainMask).last!.appendingPathComponent("Submariner")
+        let legacyPath = legacyBaseURL.appendingPathComponent("Submariner Library.sqlite")
         if !FileManager.default.fileExists(atPath: baseURL.path) {
             do {
                 try FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
             } catch {
-                let alert = NSAlert()
-                alert.alertStyle = .critical
-                alert.messageText = "Failed to Create Directory"
-                alert.informativeText = "Submariner failed to create the music directory \"\(baseURL)\"."
-                alert.runModal()
-                fatalError("Failed to create music directory at \(baseURL)")
+                logger.error("Failed to create application support directory at \(baseURL.path, privacy: .public): \(error, privacy: .public)")
+                return legacyPath
+            }
+        }
+        if !FileManager.default.fileExists(atPath: path.path), FileManager.default.fileExists(atPath: legacyPath.path) {
+            for suffix in ["", "-wal", "-shm"] {
+                let oldFile = URL(fileURLWithPath: legacyPath.path + suffix)
+                let newFile = URL(fileURLWithPath: path.path + suffix)
+                if FileManager.default.fileExists(atPath: oldFile.path) {
+                    do {
+                        try FileManager.default.moveItem(at: oldFile, to: newFile)
+                    } catch {
+                        logger.error("Unable to migrate persistent store file \(oldFile.path, privacy: .public): \(error, privacy: .public)")
+                        return legacyPath
+                    }
+                }
             }
         }
         return path
@@ -247,10 +267,6 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
     
     @IBAction func openDatabase(_ sender: Any?) {
         databaseController.showWindow(sender)
-    }
-    
-    @IBAction func openAudioFiles(_ sender: Any?) {
-        databaseController.openAudioFiles(sender)
     }
     
     @IBAction func newPlaylist(_ sender: Any?) {
@@ -378,8 +394,14 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
     }
     
     @IBAction func purgeLocalLibrary(_ sender: Any?) {
-        let operation = SBLibraryPurgeOperation(managedObjectContext: managedObjectContext)
-        OperationQueue.sharedServerQueue.addOperation(operation)
+        do {
+            if FileManager.default.fileExists(atPath: MediaCache.directory.path) {
+                try FileManager.default.removeItem(at: MediaCache.directory)
+            }
+            NotificationCenter.default.post(name: .SBTrackCacheUpdated, object: nil)
+        } catch {
+            NSApp.presentError(error)
+        }
     }
     
     // #MARK: - Core Data

@@ -5,12 +5,12 @@ We have successfully completed all parts of the Tier 4 refactoring plan, fixed r
 ## Accomplishments
 
 ### 1. Leaf View Controller Migrations (Part 1)
-We migrated five major leaf view controllers from Objective-C to Swift:
+We migrated five major leaf view controllers from Objective-C to Swift. The two local-library controllers listed in the original walkthrough were subsequently removed when the app became server-only:
 - `SBServerPodcastController.swift`
 - `SBServerHomeController.swift`
 - `SBServerLibraryController.swift`
-- `SBMusicSearchController.swift`
-- `SBMusicController.swift`
+- `SBMusicSearchController.swift` (removed)
+- `SBMusicController.swift` (removed)
 
 We deleted the old `.h` and `.m` files, cleaned up references in `project.pbxproj` and the bridging header.
 
@@ -32,7 +32,7 @@ We migrated `SBDatabaseController` and `SBWindowController` to Swift.
 - Cleaned up bridging header imports and updated `project.pbxproj` references.
 - Resolved runtime crashes caused by:
   - Unconnected `hostView` referencing `wantsLayer` before load (removed unconnected outlets).
-  - Navigation system calling `selectedItem()` on `SBMusicController`/`SBServerLibraryController` before their views were loaded (added `isViewLoaded` checks).
+  - Navigation system calling `selectedItem()` on the music and server library controllers before their views were loaded (added `isViewLoaded` checks; the local controller was later removed).
 
 ### 5. Compiler Warning Cleanup
 We cleaned up 22 compiler warnings across the codebase:

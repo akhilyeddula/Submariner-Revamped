@@ -34,6 +34,7 @@ extension NSNotification.Name {
     
     var playerStatusObserver: NSKeyValueObservation?
     var playRateObserver: NSKeyValueObservation?
+    private var itemEndObserver: NSObjectProtocol?
     
     private var currentResourceLoaderDelegate: SBResourceLoaderDelegate?
     
@@ -66,7 +67,9 @@ extension NSNotification.Name {
             // workaround newValue sometimes returning nil if AVPlayer fails (even with .new)
             switch (player.status) {
             case .readyToPlay:
+                guard self.isPlaying && !self.isPaused else { return }
                 player.play()
+                self.cacheTrack()
             case .unknown:
                 self.stop()
             case .failed:
@@ -78,11 +81,13 @@ extension NSNotification.Name {
                 return
             }
         }
-        NotificationCenter.default.addObserver(self, selector: #selector(SBPlayer.itemDidFinishPlaying), name: NSNotification.Name.AVPlayerItemDidPlayToEndTime, object: nil)
     }
     
     deinit {
-        NotificationCenter.default.removeObserver(self, name: NSNotification.Name.AVPlayerItemDidPlayToEndTime, object: nil)
+        if let itemEndObserver {
+            NotificationCenter.default.removeObserver(itemEndObserver)
+        }
+        currentResourceLoaderDelegate?.invalidateAndCancel()
     }
     
     // #MARK: - Singleton
@@ -568,7 +573,7 @@ extension NSNotification.Name {
     }
     
     @objc(playTrackByIndex:) func play(index: Int) {
-        if index < playlist.count {
+        if index >= 0 && index < playlist.count {
             play(track: playlist[index], index: index)
         }
     }
@@ -599,8 +604,6 @@ extension NSNotification.Name {
         NotificationCenter.default.post(name: .SBPlayerPlayState, object: self)
         
         DispatchQueue.main.async {
-            self.cacheTrack()
-            
             // update npic
             self.updateSystemNowPlaying()
             self.postNowPlayingNotification()
@@ -614,6 +617,12 @@ extension NSNotification.Name {
     }
     
     private func playRemote(track: SBTrack) -> Bool {
+        currentResourceLoaderDelegate?.invalidateAndCancel()
+        currentResourceLoaderDelegate = nil
+        if let itemEndObserver {
+            NotificationCenter.default.removeObserver(itemEndObserver)
+            self.itemEndObserver = nil
+        }
         remotePlayer.replaceCurrentItem(with: nil)
         
         // Only use a locally cached file if it exists and is fully written.
@@ -631,9 +640,7 @@ extension NSNotification.Name {
             if url.isFileURL {
                 logger.info("Playing local track at file: \(url, privacy: .public)")
             } else {
-                logger.info("Playing remote track via \(url.path, privacy: .public) at URL: \(url.absoluteString, privacy: .public)")
-                print("DEBUG: AVPlayer URL is \(url.absoluteString)")
-
+                logger.info("Playing remote track from \(url.host ?? "server", privacy: .public) via \(url.path, privacy: .public)")
             }
             
             var options: [String: Any] = [:]
@@ -663,12 +670,19 @@ extension NSNotification.Name {
             if !url.isFileURL {
                 let contentType = track.macOSCompatibleContentType() ?? "audio/mpeg"
                 let delegate = SBResourceLoaderDelegate(contentType: contentType)
-                asset.resourceLoader.setDelegate(delegate, queue: DispatchQueue.main)
+                asset.resourceLoader.setDelegate(delegate, queue: DispatchQueue(label: "Submariner.ResourceLoader"))
                 self.currentResourceLoaderDelegate = delegate
             }
             
             let newItem = AVPlayerItem(asset: asset)
             newItem.preferredForwardBufferDuration = 1.0
+            itemEndObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: newItem,
+                queue: .main
+            ) { [weak self] _ in
+                self?.next()
+            }
             
             remotePlayer.replaceCurrentItem(with: newItem)
             remotePlayer.automaticallyWaitsToMinimizeStalling = false
@@ -692,7 +706,12 @@ extension NSNotification.Name {
     }
     
     @objc func playOrResume() {
+        guard remotePlayer.currentItem != nil else {
+            playTracklistAtBeginning()
+            return
+        }
         remotePlayer.play()
+        isPlaying = true
         isPaused = false
         
         updateSystemNowPlaying()
@@ -714,6 +733,7 @@ extension NSNotification.Name {
             isPaused = true
         } else {
             remotePlayer.play()
+            isPlaying = true
             isPaused = false
         }
         // if we weren't playing, we need to update the metadata
@@ -725,17 +745,20 @@ extension NSNotification.Name {
         NotificationCenter.default.post(name: .SBPlayerPlayState, object: self)
     }
     
-    private func maybeDeleteCurrentTrack() {
-        if !UserDefaults.standard.deleteAfterPlay {
+    @objc func next() {
+        if UserDefaults.standard.deleteAfterPlay, let index = currentIndex {
+            playlist.remove(at: index)
+            currentIndex = nil
+            NotificationCenter.default.post(name: .SBPlayerPlaylistUpdated, object: self)
+            if index < playlist.count {
+                play(index: index)
+            } else if repeatMode == .all, !playlist.isEmpty {
+                play(index: 0)
+            } else {
+                stop()
+            }
             return
         }
-        if let currentIndex = self.currentIndex {
-            remove(trackIndexSet: IndexSet(integer: currentIndex))
-        }
-    }
-    
-    @objc func next() {
-        maybeDeleteCurrentTrack()
         if let next = nextTrack() {
             synchronized(self) {
                 play(index: next)
@@ -746,7 +769,6 @@ extension NSNotification.Name {
     }
     
     @objc func previous() {
-        maybeDeleteCurrentTrack()
         if let prev = prevTrack() {
             synchronized(self) {
                 play(index: prev)
@@ -805,6 +827,12 @@ extension NSNotification.Name {
     
     @objc func stop() {
         synchronized(self) {
+            currentResourceLoaderDelegate?.invalidateAndCancel()
+            currentResourceLoaderDelegate = nil
+            if let itemEndObserver {
+                NotificationCenter.default.removeObserver(itemEndObserver)
+                self.itemEndObserver = nil
+            }
             remotePlayer.replaceCurrentItem(with: nil)
             
             unplayAllTracks()
@@ -1009,7 +1037,7 @@ extension NSNotification.Name {
         if UserDefaults.standard.enableCacheStreaming {
             if let currentTrack = self.currentTrack {
                 // Check if we've already downloaded this track.
-                if currentTrack.isLocal == true || currentTrack.localTrack != nil {
+                if currentTrack.isLocal == true || currentTrack.isCached {
                     return
                 }
                 

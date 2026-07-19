@@ -29,8 +29,8 @@ import Cocoa
                 queryTypeButton.isEnabled = true
             case .search(let query):
                 self.title = "Search Results for \(query)"
-            case .similarTo(let artist):
-                self.title = "Similar Tracks to \(artist.itemName ?? "(unknown artist)")"
+            case .similarTo(_, let artistName):
+                self.title = "Similar Tracks to \(artistName)"
             case .topTracksFor(let artistName):
                 self.title = "Top Tracks for \(artistName)"
             case .starred:
@@ -64,7 +64,8 @@ import Cocoa
         
         resultObserver = NotificationCenter.default.addObserver(forName: .SBSubsonicSearchResultUpdated, object: nil, queue: nil) { notification in
             DispatchQueue.main.async {
-                if let results = notification.object as! SBSearchResult? {
+                if let results = notification.object as? SBSearchResult,
+                   results.serverID == self.server?.objectID {
                     results.fetchTracks(managedObjectContext: self.managedObjectContext)
                     self.searchResult = results
                     self.shouldInfiniteScroll = results.paginatable && results.returnedTracks > 0;
@@ -97,9 +98,10 @@ import Cocoa
         // The coordinate space of the clip/scroll/document view isn't obvious,
         // and NSScrollView doesn't make it easy. See https://stackoverflow.com/a/56080733
         let verticalPosition = clipView.bounds.origin.y + clipView.bounds.height
-        if verticalPosition == documentView.bounds.height {
+        if verticalPosition >= documentView.bounds.height - 100,
+           let searchResult {
             shouldInfiniteScroll = false
-            server.updateSearch(existingResult: self.searchResult!)
+            server.updateSearch(existingResult: searchResult)
         }
     }
     

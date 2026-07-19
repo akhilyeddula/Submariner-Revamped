@@ -27,7 +27,7 @@ class SBOperation: Operation, ObservableObject, Identifiable, @unchecked Sendabl
         // rather than attaching to the persistent store coordinator.
         self.threadedContext.parent = managedObjectContext
         self.threadedContext.automaticallyMergesChangesFromParent = true
-        self.threadedContext.mergePolicy = self.mainContext.mergePolicy
+        self.threadedContext.mergePolicy = NSMergePolicy.mergeByPropertyObjectTrump
         self.threadedContext.retainsRegisteredObjects = true
         self.threadedContext.transactionAuthor = author
         
@@ -54,65 +54,92 @@ class SBOperation: Operation, ObservableObject, Identifiable, @unchecked Sendabl
     
     // #MARK: - Concurrency
     
+    private let stateLock = NSRecursiveLock()
     private var _isExecuting = false
     @objc dynamic override var isExecuting: Bool {
-        get { return _isExecuting }
-        set { _isExecuting = newValue }
+        stateLock.withLock { _isExecuting }
     }
     
     private var _isFinished = false
+    private var isFinishing = false
     @objc dynamic override var isFinished: Bool {
-        get { return _isFinished }
-        set { _isFinished = newValue }
+        stateLock.withLock { _isFinished }
     }
     
-    override var isConcurrent: Bool { true }
     override var isAsynchronous: Bool { true }
     
     public override func start() {
         if isCancelled {
-            self.willChangeValue(forKey: "isFinished")
-            isFinished = true
-            self.didChangeValue(forKey: "isFinished")
+            finish()
             return
         }
-        Thread.detachNewThread {
+
+        transitionToExecuting()
+        threadedContext.perform { [weak self] in
+            guard let self else { return }
+            guard !self.isCancelled else {
+                self.finish()
+                return
+            }
             self.main()
         }
-        self.willChangeValue(forKey: "isExecuting")
-        isExecuting = true
-        self.didChangeValue(forKey: "isExecuting")
     }
     
     public func finish() {
-        // TODO: Why do we have to do this if the propert is @objc dynamic?
-        self.willChangeValue(forKey: "isFinished")
-        self.willChangeValue(forKey: "isExecuting")
-        isExecuting = false
-        isFinished = true
-        self.didChangeValue(forKey: "isExecuting")
-        self.didChangeValue(forKey: "isFinished")
+        let shouldFinish = stateLock.withLock { () -> Bool in
+            guard !_isFinished, !isFinishing else { return false }
+            isFinishing = true
+            return true
+        }
+        guard shouldFinish else { return }
+
+        let wasExecuting = isExecuting
+        willChangeValue(forKey: "isFinished")
+        if wasExecuting {
+            willChangeValue(forKey: "isExecuting")
+        }
+        stateLock.withLock {
+            _isExecuting = false
+            _isFinished = true
+            isFinishing = false
+        }
+        if wasExecuting {
+            didChangeValue(forKey: "isExecuting")
+        }
+        didChangeValue(forKey: "isFinished")
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: .SBSubsonicOperationFinished, object: self)
         }
     }
 
+    private func transitionToExecuting() {
+        willChangeValue(forKey: "isExecuting")
+        stateLock.withLock { _isExecuting = true }
+        didChangeValue(forKey: "isExecuting")
+    }
+
     // #MARK: - Core Data
     
     public func saveThreadedContext() {
-        if self.threadedContext.hasChanges {
+        threadedContext.performAndWait {
+            guard threadedContext.hasChanges else { return }
             logger.info("Changes to Core Data will be saved...")
             do {
-                // Merging is now done by NSManagedObjectContext.automaticallyMergesChangesFromParent
-                try self.threadedContext.performAndWait {
-                    try self.threadedContext.save()
-                }
-                try self.mainContext.performAndWait {
-                    try self.mainContext.save()
+                try threadedContext.save()
+                try mainContext.performAndWait {
+                    try mainContext.save()
                 }
             } catch {
                 logger.error("Failed to save: \(error, privacy: .public)")
             }
         }
+    }
+}
+
+private extension NSRecursiveLock {
+    func withLock<T>(_ body: () throws -> T) rethrows -> T {
+        lock()
+        defer { unlock() }
+        return try body()
     }
 }

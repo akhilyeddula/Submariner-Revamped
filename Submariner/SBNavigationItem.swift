@@ -46,9 +46,16 @@ import Cocoa
         return nil
     }
     
-    @objc var similarToArtist: SBArtist? {
-        if case let .similarTo(artist) = self.query {
-            return artist
+    @objc var similarToArtistID: String? {
+        if case let .similarTo(artistID, _) = self.query {
+            return artistID
+        }
+        return nil
+    }
+
+    @objc var similarToArtistName: String? {
+        if case let .similarTo(_, artistName) = self.query {
+            return artistName
         }
         return nil
     }
@@ -76,7 +83,7 @@ import Cocoa
     }
     
     @objc init(server: SBServer, similarTo artist: SBArtist) {
-        self.query = .similarTo(artist: artist)
+        self.query = .similarTo(artistID: artist.itemId ?? "", artistName: artist.itemName ?? "Unknown Artist")
         super.init(server: server)
     }
 }
@@ -91,28 +98,12 @@ import Cocoa
     }
 }
 
-@objc class SBLocalSearchNavigationItem: SBNavigationItem {
-    override var identifier: String { "MusicSearch" }
-    
-    @objc var query: String
-    
-    @objc init(query: String) {
-        self.query = query
-    }
-}
-
 @objc class SBDownloadsNavigationItem: SBNavigationItem {
     override var identifier: String { "Downloads" }
 }
 
 @objc class SBOnboardingNavigationItem: SBNavigationItem {
     override var identifier: String { "Onboarding" }
-}
-
-@objc class SBLocalMusicNavigationItem: SBNavigationItem {
-    override var identifier: String { "Music" }
-    
-    @objc var selectedMusicItem: SBMusicItem?
 }
 
 @objc class SBServerNavigationItem: SBNavigationItem {

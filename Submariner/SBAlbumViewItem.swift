@@ -11,6 +11,7 @@
 import Cocoa
 import SwiftUI
 import Combine
+import CoreData
 import os
 
 fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBAlbumViewItem")
@@ -73,6 +74,10 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
     }
     
     @objc private func coversUpdated(_ notification: Notification) {
+        if let albumID = notification.object as? NSManagedObjectID,
+           albumID != album?.objectID {
+            return
+        }
         logger.info("Covers updated notification received in SBAlbumViewItem for: \(self.album?.itemName ?? "nil")")
         self.objectWillChange.send()
         coverUpdateCounter += 1

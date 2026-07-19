@@ -32,8 +32,6 @@
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
-		<key>NSAllowsArbitraryLoadsForMedia</key>
-		<true/>
 	</dict>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2022-2025 Calvin Buckley, Copyright © 2011-2014 Rafaël Warnault, All rights reserved.</string>
@@ -47,25 +45,6 @@
 	<true/>
 	<key>OSAScriptingDefinition</key>
 	<string>Submariner.sdef</string>
-	<key>CFBundleDocumentTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeName</key>
-			<string>Submariner Audio File</string>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>LSHandlerRank</key>
-			<string>None</string>
-			<key>LSItemContentTypes</key>
-			<array>
-				<string>public.audio</string>
-			</array>
-			<key>NSExportableTypes</key>
-			<array>
-				<string>public.audio</string>
-			</array>
-		</dict>
-	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Submariner needs permission if your server is on your local network.</string>
 </dict>

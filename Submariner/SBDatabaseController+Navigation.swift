@@ -13,11 +13,7 @@ extension SBDatabaseController {
     // MARK: - Navigation Routing
     @objc(goToTrack:) func go(to track: SBTrack?) {
         guard let track = track else { return }
-        if track.isLocal?.boolValue == true {
-            let navItem = SBLocalMusicNavigationItem()
-            navItem.selectedMusicItem = track
-            self.navigate(to: navItem)
-        } else if let server = track.server {
+        if let server = track.server {
             self.switchToResource(server)
             serverLibraryController.server = server
             let navItem = SBServerLibraryNavigationItem(server: server)
@@ -60,7 +56,7 @@ extension SBDatabaseController {
         
         var navItem: SBNavigationItem? = nil
         if resource is SBLibrary {
-            navItem = SBLocalMusicNavigationItem()
+            return
         } else if resource is SBDownloads {
             navItem = SBDownloadsNavigationItem()
         } else if let playlist = resource as? SBPlaylist {
@@ -84,21 +80,11 @@ extension SBDatabaseController {
             if let server = album.artist?.server {
                 self.switchToResource(server)
                 serverLibraryController.showAlbumInLibrary(album)
-            } else {
-                if let library = try? self.managedObjectContext.fetch(entityNamed: "Library") as? SBLibrary {
-                    self.switchToResource(library)
-                    musicController.showAlbumInLibrary(album)
-                }
             }
         } else if let artist = resource as? SBArtist {
             if let server = artist.server {
                 self.switchToResource(server)
                 serverLibraryController.showArtistInLibrary(artist)
-            } else {
-                if let library = try? self.managedObjectContext.fetch(entityNamed: "Library") as? SBLibrary {
-                    self.switchToResource(library)
-                    musicController.showArtistInLibrary(artist)
-                }
             }
         }
         
@@ -109,10 +95,12 @@ extension SBDatabaseController {
 
     @objc func updateSourceListSelection(_ resource: NSManagedObject) {
         var sidebarResource: NSManagedObject = resource
-        if sidebarResource is SBArtist || sidebarResource is SBAlbum {
-            if let library = try? self.managedObjectContext.fetch(entityNamed: "Library") as? SBLibrary {
-                sidebarResource = library
-            }
+        if let artist = sidebarResource as? SBArtist, let server = artist.server {
+            sidebarResource = server
+        } else if let album = sidebarResource as? SBAlbum, let server = album.artist?.server {
+            sidebarResource = server
+        } else if let track = sidebarResource as? SBTrack, let server = track.server {
+            sidebarResource = server
         }
         
         let newPath = resourcesController.indexPath(for: sidebarResource) as IndexPath?
@@ -120,24 +108,6 @@ extension SBDatabaseController {
             ignoreNextSelection = true
             resourcesController.setSelectionIndexPath(path)
         }
-    }
-
-    @objc func openImportAlert(_ sender: NSWindow, files: [URL]) -> Bool {
-        if UserDefaults.standard.bool(forKey: "canLinkImport") {
-            let importAlert = NSAlert()
-            importAlert.messageText = "Do you want to copy the imported audio files?"
-            importAlert.informativeText = "The files will copied into the library directory, or have the new library items link to the original files."
-            importAlert.addButton(withTitle: "Copy into Library")
-            importAlert.addButton(withTitle: "Link Existing Files")
-            importAlert.addButton(withTitle: "Cancel")
-            
-            importAlert.beginSheetModal(for: sender) { [weak self] alertReturnCode in
-                self?.importSheetDidEnd(sender, returnCode: alertReturnCode.rawValue, contextInfo: files)
-            }
-        } else {
-            self.importSheetDidEnd(sender, returnCode: NSApplication.ModalResponse.alertFirstButtonReturn.rawValue, contextInfo: files)
-        }
-        return false
     }
 
     @objc func getTopTracks(for artistName: String) {
@@ -168,9 +138,7 @@ extension SBDatabaseController {
         guard rightVC.selectedIndex != -1, !rightVC.arrangedObjects.isEmpty else { return }
         
         let navItem = rightVC.arrangedObjects[rightVC.selectedIndex] as? SBNavigationItem
-        if let musicNavItem = navItem as? SBLocalMusicNavigationItem {
-            musicNavItem.selectedMusicItem = musicController.selectedItem()
-        } else if let musicNavItem = navItem as? SBServerLibraryNavigationItem {
+        if let musicNavItem = navItem as? SBServerLibraryNavigationItem {
             musicNavItem.selectedMusicItem = serverLibraryController.selectedItem()
         }
     }
@@ -210,10 +178,7 @@ extension SBDatabaseController {
             self.server = nil
         }
         
-        if let searchNavItem = navItem as? SBLocalSearchNavigationItem {
-            musicSearchController.searchString(searchNavItem.query)
-            searchField.stringValue = searchNavItem.query
-        } else if let searchNavItem = navItem as? SBServerSearchNavigationItem {
+        if let searchNavItem = navItem as? SBServerSearchNavigationItem {
             if let q = searchNavItem.searchQuery, q.isEmpty {
                 self.server?.search(query: "")
                 searchField.stringValue = ""
@@ -224,8 +189,14 @@ extension SBDatabaseController {
             } else if let artistName = searchNavItem.topTracksForArtist {
                 self.server?.getTopTracks(artistName: artistName)
                 searchField.stringValue = ""
-            } else if let artist = searchNavItem.similarToArtist {
-                self.server?.getSimilarTracks(to: artist)
+            } else if let artistID = searchNavItem.similarToArtistID,
+                      let artistName = searchNavItem.similarToArtistName,
+                      let server = self.server {
+                let request = SBSubsonicRequestOperation(
+                    server: server,
+                    request: .getSimilarTracks(artistID: artistID, artistName: artistName)
+                )
+                OperationQueue.sharedServerQueue.addOperation(request)
                 searchField.stringValue = ""
             } else if searchNavItem.starred {
                 self.server?.getStarred()
@@ -248,15 +219,7 @@ extension SBDatabaseController {
             NotificationCenter.default.post(name: NSNotification.Name("SBPlaylistSelectionChanged"), object: nil)
         }
         
-        if let musicNavItem = navItem as? SBLocalMusicNavigationItem {
-            if let track = musicNavItem.selectedMusicItem as? SBTrack {
-                musicController.showTrackInLibrary(track)
-            } else if let album = musicNavItem.selectedMusicItem as? SBAlbum {
-                musicController.showAlbumInLibrary(album)
-            } else if let artist = musicNavItem.selectedMusicItem as? SBArtist {
-                musicController.showArtistInLibrary(artist)
-            }
-        } else if let musicNavItem = navItem as? SBServerLibraryNavigationItem {
+        if let musicNavItem = navItem as? SBServerLibraryNavigationItem {
             if let track = musicNavItem.selectedMusicItem as? SBTrack {
                 serverLibraryController.showTrackInLibrary(track)
             } else if let album = musicNavItem.selectedMusicItem as? SBAlbum {
@@ -266,15 +229,12 @@ extension SBDatabaseController {
             }
         }
         
-        if navItem is SBLocalMusicNavigationItem || navItem is SBLocalSearchNavigationItem {
-            searchToolbarItem.isEnabled = true
-            searchField.placeholderString = "Local Search"
-        } else if navItem is SBServerNavigationItem {
+        if navItem is SBServerNavigationItem {
             searchToolbarItem.isEnabled = true
             searchField.placeholderString = "Server Search"
         } else if let playlistNavItem = navItem as? SBPlaylistNavigationItem {
             searchToolbarItem.isEnabled = true
-            searchField.placeholderString = (playlistNavItem.playlist.server != nil) ? "Server Search" : "Local Search"
+            searchField.placeholderString = (playlistNavItem.playlist.server != nil) ? "Server Search" : ""
         } else {
             searchToolbarItem.isEnabled = false
             searchField.placeholderString = ""
@@ -283,10 +243,6 @@ extension SBDatabaseController {
         if navItem is SBDownloadsNavigationItem {
             if let downloads = try? self.managedObjectContext.fetch(entityNamed: "Downloads") as? SBDownloads {
                 self.updateSourceListSelection(downloads)
-            }
-        } else if navItem is SBLocalMusicNavigationItem {
-            if let library = try? self.managedObjectContext.fetch(entityNamed: "Library") as? SBLibrary {
-                self.updateSourceListSelection(library)
             }
         }
         
@@ -309,8 +265,6 @@ extension SBDatabaseController {
 
     func pageController(_ pageController: NSPageController, viewControllerForIdentifier identifier: String) -> NSViewController {
         switch identifier {
-        case "Music":
-            return musicController
         case "Onboarding":
             return onboardingController
         case "Downloads":
@@ -325,8 +279,6 @@ extension SBDatabaseController {
             return serverPodcastController
         case "ServerSearch":
             return serverSearchController
-        case "MusicSearch":
-            return musicSearchController
         case "Playlist":
             return playlistController
         default:

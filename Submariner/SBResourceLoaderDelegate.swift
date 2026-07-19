@@ -8,6 +8,7 @@
 
 import Foundation
 import AVFoundation
+import UniformTypeIdentifiers
 import os.log
 
 fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "fr.read-write.Submariner", category: "SBResourceLoaderDelegate")
@@ -23,23 +24,29 @@ class SBResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate, URLSess
 
     /// A dedicated URLSession whose delegate is self. Created lazily so the URLSession
     /// doesn't exist until the first request arrives.
-    private lazy var session: URLSession = {
+    private lazy var session: URLSession = makeSession()
+
+    private func makeSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 3600 // Allow up to 1 hour for long tracks/streams
         // delegateQueue nil → URLSession creates its own serial OperationQueue
         return URLSession(configuration: config, delegate: self, delegateQueue: nil)
-    }()
+    }
 
     init(contentType: String) {
         self.contentType = contentType
         super.init()
     }
 
-    deinit {
-        // Cancel all outstanding tasks and invalidate the session when we're released.
-        // This is critical: without this, the URLSession retains a strong reference to
-        // self via its delegate, creating a retain cycle that prevents deallocation.
+    func invalidateAndCancel() {
+        let requests = lock.withLock { () -> [AVAssetResourceLoadingRequest] in
+            let requests = Array(pendingRequests.values)
+            pendingRequests.removeAll()
+            return requests
+        }
+        let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)
+        requests.forEach { $0.finishLoading(with: error) }
         session.invalidateAndCancel()
     }
 
@@ -119,8 +126,30 @@ class SBResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate, URLSess
             return
         }
 
+        guard let http = response as? HTTPURLResponse,
+              http.statusCode == 200 || http.statusCode == 206 else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? NSURLErrorBadServerResponse
+            let error = NSError(domain: NSURLErrorDomain, code: statusCode,
+                                userInfo: [NSLocalizedDescriptionKey: "The audio server returned HTTP \(statusCode)."])
+            lock.withLock { pendingRequests.removeValue(forKey: dataTask) }
+            loadingRequest.finishLoading(with: error)
+            completionHandler(.cancel)
+            return
+        }
+
+        if let requestedOffset = loadingRequest.dataRequest?.requestedOffset,
+           requestedOffset > 0, http.statusCode != 206 {
+            let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorBadServerResponse,
+                                userInfo: [NSLocalizedDescriptionKey: "The audio server did not honor a byte-range request."])
+            lock.withLock { pendingRequests.removeValue(forKey: dataTask) }
+            loadingRequest.finishLoading(with: error)
+            completionHandler(.cancel)
+            return
+        }
+
         if let infoRequest = loadingRequest.contentInformationRequest {
-            infoRequest.contentType = contentType
+            let mimeType = response.mimeType ?? contentType
+            infoRequest.contentType = UTType(mimeType: mimeType)?.identifier ?? mimeType
             
             var contentLength: Int64 = -1
             var supportsRanges = false
@@ -143,6 +172,16 @@ class SBResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate, URLSess
                 }
             }
 
+
+            // Some reverse proxies ignore Range. Do not download the entire track merely
+            // to answer AVFoundation's metadata-only request.
+            if loadingRequest.dataRequest == nil && http.statusCode == 200 {
+                lock.withLock { pendingRequests.removeValue(forKey: dataTask) }
+                loadingRequest.finishLoading()
+                completionHandler(.cancel)
+                return
+            }
+
             // If a stream is being transcoded by Navidrome/Subsonic (e.g. maxBitRate is set), 
             // it will be sent with Transfer-Encoding: chunked, and we won't know the content length.
             // If we don't know the content length, we MUST NOT claim byte range support, otherwise
@@ -160,7 +199,22 @@ class SBResourceLoaderDelegate: NSObject, AVAssetResourceLoaderDelegate, URLSess
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         let loadingRequest = lock.withLock { pendingRequests[dataTask] }
-        loadingRequest?.dataRequest?.respond(with: data)
+        guard let loadingRequest, let request = loadingRequest.dataRequest else { return }
+
+        if !request.requestsAllDataToEndOfResource {
+            let requestedEnd = request.requestedOffset + Int64(request.requestedLength)
+            let remaining = max(requestedEnd - request.currentOffset, 0)
+            if Int64(data.count) >= remaining {
+                if remaining > 0 {
+                    request.respond(with: data.prefix(Int(remaining)))
+                }
+                lock.withLock { pendingRequests.removeValue(forKey: dataTask) }
+                loadingRequest.finishLoading()
+                dataTask.cancel()
+                return
+            }
+        }
+        request.respond(with: data)
     }
 
     // MARK: - URLSessionTaskDelegate

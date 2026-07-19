@@ -8,9 +8,27 @@
 
 import Cocoa
 import UniformTypeIdentifiers
+import CryptoKit
 import os
 
 fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBSubsonicParsingOperation")
+
+private enum SubsonicParsingError: LocalizedError {
+    case missingResponseData
+    case invalidXML
+    case unsupportedContentType(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingResponseData:
+            return "The server returned an empty response."
+        case .invalidXML:
+            return "The server returned malformed XML."
+        case .unsupportedContentType(let type):
+            return "The server returned an unsupported content type: \(type)."
+        }
+    }
+}
 
 extension NSNotification.Name{
     static let SBSubsonicConnectionFailed = NSNotification.Name("SBSubsonicConnectionFailedNotification")
@@ -32,12 +50,14 @@ extension NSNotification.Name{
 
 class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sendable {
     let requestType: SBSubsonicRequestType
+    private let serverID: NSManagedObjectID
     var server: SBServer!
     let xmlData: Data?
     let mimeType: String?
     
     // state
     var errored: Bool = false
+    private var parserError: Error?
     
     // state for selected object
     var currentPlaylist: SBPlaylist?
@@ -70,36 +90,46 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
           xml: Data?,
           mimeType: String?) {
         self.requestType = requestType
+        self.serverID = server
         self.xmlData = xml
         self.mimeType = mimeType
         
         super.init(managedObjectContext: mainContext, name: "Parsing Subsonic Request", author: "Request \(requestType)")
-        self.server = threadedContext.object(with: server) as? SBServer
     }
     
     // #MARK: - NSOperation
     
     override func main() {
-        synchronized(server) {
-            defer {
-                self.finish()
-                self.saveThreadedContext()
+        guard let server = try? threadedContext.existingObject(with: serverID) as? SBServer else {
+            finish()
+            return
+        }
+        self.server = server
+
+        defer { finish() }
+        do {
+            if case .getCoverArt = requestType {
+                try mainImportCover()
+            } else if mimeType?.contains("xml") == true || responseLooksLikeXML {
+                try mainXML()
+            } else if let mimeType, mimeType.contains("json") {
+                throw SubsonicParsingError.unsupportedContentType(mimeType)
+            } else {
+                throw SubsonicParsingError.unsupportedContentType(mimeType ?? "missing")
             }
-            do {
-                if let mimeType = self.mimeType, mimeType.hasPrefix("image/") {
-                    try mainImportCover()
-                } else if let mimeType = self.mimeType, mimeType.contains("xml") {
-                    // Navidrome and Subsonic differ by using application/ or text/
-                    try mainXML()
-                } else if let mimeType = self.mimeType, mimeType.contains("json") {
-                    logger.error("Submariner doesn't support JSON")
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    NSApplication.shared.presentError(error)
-                }
+            saveThreadedContext()
+        } catch {
+            threadedContext.rollback()
+            DispatchQueue.main.async {
+                NSApplication.shared.presentError(error)
             }
         }
+    }
+
+    private var responseLooksLikeXML: Bool {
+        guard let xmlData,
+              let prefix = String(data: xmlData.prefix(128), encoding: .utf8) else { return false }
+        return prefix.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<")
     }
     
     // TODO: These should be factored out into separate classes
@@ -112,8 +142,15 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         
         if let currentCoverID = self.currentCoverID, let data = self.xmlData {
             // we know mimeType is not null coming from main. worst case, ID3 covers are usually JPEG
-            let fileType = UTType(mimeType: self.mimeType!) ?? data.guessImageType() ?? UTType.jpeg
-            let fileName = coversDir.appendingPathComponent(currentCoverID, conformingTo: fileType)
+            let declaredType = mimeType
+                .flatMap { UTType(mimeType: $0) }
+                .flatMap { $0.conforms(to: UTType.image) ? $0 : nil }
+            let fileType = declaredType ?? data.guessImageType() ?? UTType.jpeg
+            let coverIdentity = [server.url ?? "", server.username ?? "", currentCoverID].joined(separator: "\u{1F}")
+            let safeCoverName = SHA256.hash(data: Data(coverIdentity.utf8))
+                .map { String(format: "%02x", $0) }
+                .joined()
+            let fileName = coversDir.appendingPathComponent(safeCoverName, conformingTo: fileType)
             try data.write(to: fileName, options: [.atomic])
             logger.info("Wrote cover file \(fileName, privacy: .public)")
             
@@ -131,16 +168,23 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         self.threadedContext.processPendingChanges()
         self.saveThreadedContext()
         
+        let albumID = currentAlbumID.flatMap { fetchAlbum(id: $0)?.objectID }
+        let imagePath = currentCoverID.flatMap { fetchCover(coverID: $0)?.imagePath as String? }
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .SBSubsonicCoversUpdated, object: nil)
+            NotificationCenter.default.post(
+                name: .SBSubsonicCoversUpdated,
+                object: albumID,
+                userInfo: imagePath.map { ["imagePath": $0] }
+            )
         }
     }
     
     private func mainXML() throws {
-        if let data = self.xmlData {
-            let parser = XMLParser(data: data)
-            parser.delegate = self
-            parser.parse()
+        guard let data = xmlData else { throw SubsonicParsingError.missingResponseData }
+        let parser = XMLParser(data: data)
+        parser.delegate = self
+        guard parser.parse() else {
+            throw parserError ?? parser.parserError ?? SubsonicParsingError.invalidXML
         }
     }
     
@@ -190,7 +234,9 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
             }
             // XXX: Cover, podcast, track? Do we need to remove it from any sets?
         }
-        NotificationCenter.default.post(name: .SBSubsonicConnectionFailed, object: attributeDict)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .SBSubsonicConnectionFailed, object: attributeDict)
+        }
     }
     
     private func parseElementIndexes(attributeDict: [String: String]) {
@@ -233,7 +279,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
                 return
             }
             let _ = createDirectory(attributes: attributeDict, inContextOf: .childDirectory)
-        } else if let id = attributeDict["id"], let parent = attributeDict["id"] {
+        } else if let id = attributeDict["id"], let parent = attributeDict["parent"] {
             if let type = attributeDict["type"], type != "music" {
                 logger.info("Ignoring directory entry for non-music")
                 return
@@ -428,7 +474,11 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         nowPlaying.track = attachedTrack
         attachedTrack?.addToNowPlaying(nowPlaying)
         
-        updateTrackDependenciesForTag(attachedTrack!, attributeDict: attributeDict)
+        guard let attachedTrack else {
+            threadedContext.delete(nowPlaying)
+            return
+        }
+        updateTrackDependenciesForTag(attachedTrack, attributeDict: attributeDict)
         self.currentTrack = attachedTrack
         
         // do it here
@@ -543,19 +593,23 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
                 episode = createEpisode(attributes: attributeDict)
             }
             
-            if currentPodcast.episodes?.contains(episode!) == true && attributeDict["status"] == episode?.episodeStatus {
-                updateEpisode(episode!, attributes: attributeDict)
-            } else {
-                currentPodcast.addToEpisodes(episode!)
+            guard let episode else { return }
+            updateEpisode(episode, attributes: attributeDict)
+            if currentPodcast.episodes?.contains(episode) != true {
+                currentPodcast.addToEpisodes(episode)
             }
             
             if let streamID = attributeDict["streamId"] {
                 let track = fetchTrack(id: streamID)
                 if track == nil {
-                    // XXX: does it associate? is it used?
-                    server.getTrack(trackID: streamID)
+                    let serverID = server.objectID
+                    DispatchQueue.main.async {
+                        if let server = try? self.mainContext.existingObject(with: serverID) as? SBServer {
+                            server.getTrack(trackID: streamID)
+                        }
+                    }
                 } else {
-                    episode!.track = track
+                    episode.track = track
                 }
             }
             
@@ -655,7 +709,10 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
     }
     
     private func postServerNotification(_ notificationName: NSNotification.Name, userInfo: [AnyHashable: Any]? = nil) {
-        NotificationCenter.default.post(name: notificationName, object: server.objectID, userInfo: userInfo)
+        let serverID = server.objectID
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: notificationName, object: serverID, userInfo: userInfo)
+        }
     }
     
     func parserDidEndDocument(_ parser: XMLParser) {
@@ -726,8 +783,15 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         
         // If we have covers to fetch, do it after updating the DB,
         // or we'll have issues with the path getting unset
-        for (albumID, coverID) in coversToFetch {
-            server.getCover(id: coverID, for: albumID)
+        let pendingCovers = coversToFetch
+        let serverID = server.objectID
+        if !pendingCovers.isEmpty {
+            DispatchQueue.main.async {
+                guard let server = try? self.mainContext.existingObject(with: serverID) as? SBServer else { return }
+                for (albumID, coverID) in pendingCovers {
+                    server.getCover(id: coverID, for: albumID)
+                }
+            }
         }
         
         switch requestType {
@@ -737,15 +801,21 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
             postServerNotification(.SBSubsonicPlaylistsUpdated)
         case .getPlaylist(_):
             if let playlist = currentPlaylist {
-                NotificationCenter.default.post(name: .SBSubsonicPlaylistUpdated, object: playlist.objectID)
+                let playlistID = playlist.objectID
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .SBSubsonicPlaylistUpdated, object: playlistID)
+                }
             }
             currentPlaylist = nil
         case .createPlaylist(_, _):
             postServerNotification(.SBSubsonicPlaylistsCreated)
         case .getNowPlaying:
             postServerNotification(.SBSubsonicNowPlayingUpdated)
-        case .search(_), .getTopTracks(artistName: _), .getSimilarTracks(artist: _), .updateSearch(existingResult: _), .getStarred:
-            NotificationCenter.default.post(name: .SBSubsonicSearchResultUpdated, object: currentSearch)
+        case .search(_), .getTopTracks(artistName: _), .getSimilarTracks(artistID: _, artistName: _), .updateSearch(existingResult: _), .getStarred:
+            let result = currentSearch
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .SBSubsonicSearchResultUpdated, object: result)
+            }
         case .getPodcasts:
             postServerNotification(.SBSubsonicPodcastsUpdated)
         case .replacePlaylist(_, _):
@@ -767,10 +837,9 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
     }
     
     func parser(_ parser: XMLParser, parseErrorOccurred parseError: Error) {
+        errored = true
+        parserError = parseError
         logger.error("XML parsing error \(parseError, privacy: .public)")
-        DispatchQueue.main.async {
-            NSApp.presentError(parseError)
-        }
     }
     
     // #MARK: - Fetch Core Data objects
@@ -822,7 +891,10 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
             // The second condition should be written as "ALL tracks.server == %@",
             // but Core Data doesn't like that. See https://stackoverflow.com/a/47762233
             // for the workaround used.
-            fetchRequest.predicate = NSPredicate(format: "(itemId == %@) && SUBQUERY(tracks, $X, $X.server == %@).@count == tracks.@count", id, server)
+            fetchRequest.predicate = NSPredicate(
+                format: "(itemId == %@) && ((artist.server == %@) OR (ANY tracks.server == %@))",
+                id, server, server
+            )
         }
         fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
@@ -835,7 +907,10 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         if let artist = artist {
             fetchRequest.predicate = NSPredicate(format: "(itemName == %@) && (artist == %@)", name, artist)
         } else {
-            fetchRequest.predicate = NSPredicate(format: "(itemName == %@) && SUBQUERY(tracks, $X, $X.server == %@).@count == tracks.@count", name, server)
+            fetchRequest.predicate = NSPredicate(
+                format: "(itemName == %@) && ((artist.server == %@) OR (ANY tracks.server == %@))",
+                name, server, server
+            )
         }
         fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
@@ -845,8 +920,10 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
     
     private func fetchCover(coverID: String) -> SBCover? {
         let fetchRequest = NSFetchRequest<SBCover>(entityName: "Cover")
-        // XXX: server on predicate here?
-        fetchRequest.predicate = NSPredicate(format: "(itemId == %@)", coverID)
+        fetchRequest.predicate = NSPredicate(
+            format: "(itemId == %@) && ((album.artist.server == %@) OR (track.server == %@))",
+            coverID, server, server
+        )
         fetchRequest.fetchLimit = 1
         let results = try? threadedContext.fetch(fetchRequest)
         

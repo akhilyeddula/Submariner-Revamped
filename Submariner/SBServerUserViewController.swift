@@ -119,8 +119,8 @@ extension NSNotification.Name {
         if UserDefaults.standard.autoRefreshNowPlaying {
             let interval = TimeInterval(30)
             autoRefreshTimer?.invalidate()
-            autoRefreshTimer = Timer(timeInterval: interval, repeats: true) { timer in
-                self.refreshNowPlaying()
+            autoRefreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+                self?.refreshNowPlaying()
             }
         } else {
             autoRefreshTimer?.invalidate()
@@ -214,7 +214,7 @@ extension NSNotification.Name {
                 } label: {
                     Text("Download")
                 }
-                .disabled(item.track?.localTrack != nil)
+                .disabled(item.track?.isCached == true)
                 Button {
                     if let track = item.track {
                         serverUsersController.showInLibrary(track: track)
@@ -229,7 +229,7 @@ extension NSNotification.Name {
                 } label: {
                     Text("Show in Finder")
                 }
-                .disabled(item.track?.localTrack == nil)
+                .disabled(item.track?.isCached != true)
             }
         }
     }

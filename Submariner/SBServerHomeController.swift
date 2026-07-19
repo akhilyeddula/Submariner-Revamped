@@ -8,6 +8,7 @@
 //
 
 import Cocoa
+import CoreData
 
 private let GROUP_LABEL = "Label"
 private let GROUP_SEPARATOR = "HasSeparator"
@@ -28,6 +29,7 @@ class SBServerHomeController: SBServerViewController, MGScopeBarDelegate, NSTabl
     private var scopeGroups = NSMutableArray()
     private var albumSortDescriptor: [NSSortDescriptor]?
     private var shouldInfiniteScroll = false
+    private weak var observedAlbum: SBAlbum?
     
     override class func nibName() -> String? {
         return "ServerHome"
@@ -69,6 +71,7 @@ class SBServerHomeController: SBServerViewController, MGScopeBarDelegate, NSTabl
     }
     
     deinit {
+        observedAlbum?.removeObserver(self, forKeyPath: "tracks")
         NotificationCenter.default.removeObserver(self)
         
         UserDefaults.standard.removeObserver(self, forKeyPath: "albumSortOrder")
@@ -196,10 +199,12 @@ class SBServerHomeController: SBServerViewController, MGScopeBarDelegate, NSTabl
     override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
         if let keyPath = keyPath {
             if let album = object as? SBAlbum, keyPath == "tracks" {
+                guard album === observedAlbum else { return }
                 if let set = album.tracks, set.count > 0 {
                     tracksController.content = set
                     tracksTableView.reloadData()
                     album.removeObserver(self, forKeyPath: "tracks")
+                    observedAlbum = nil
                 }
             } else if let controller = object as? NSArrayController, controller == tracksController, keyPath == "selectedObjects" {
                 if self.view.window != nil {
@@ -233,7 +238,7 @@ class SBServerHomeController: SBServerViewController, MGScopeBarDelegate, NSTabl
         let clipView = scrollView.contentView
         
         let verticalPosition = clipView.bounds.origin.y + clipView.bounds.size.height
-        if verticalPosition == documentView.bounds.size.height {
+        if verticalPosition >= documentView.bounds.size.height - 100 {
             shouldInfiniteScroll = false
             self.server?.updateAlbumListFor(type: self.currentAlbumListType())
         }
@@ -244,6 +249,7 @@ class SBServerHomeController: SBServerViewController, MGScopeBarDelegate, NSTabl
     }
     
     @objc func subsonicAlbumsUpdatedNotification(_ notification: Notification) {
+        guard notification.object as? NSManagedObjectID == server?.objectID else { return }
         if let userInfo = notification.userInfo,
            let count = userInfo["count"] as? NSNumber {
             shouldInfiniteScroll = count.intValue > 0
@@ -255,7 +261,10 @@ class SBServerHomeController: SBServerViewController, MGScopeBarDelegate, NSTabl
     
     @objc func subsonicCoversUpdatedNotification(_ notification: Notification) {
         DispatchQueue.main.async {
-            self.albumsCollectionView.reloadData()
+            guard let albumID = notification.object as? NSManagedObjectID,
+                  let albums = self.albumsController.arrangedObjects as? [SBAlbum],
+                  let index = albums.firstIndex(where: { $0.objectID == albumID }) else { return }
+            self.albumsCollectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
         }
     }
     
@@ -289,11 +298,16 @@ class SBServerHomeController: SBServerViewController, MGScopeBarDelegate, NSTabl
         if let arrangedObjects = albumsController.arrangedObjects as? [SBAlbum],
            selectedRow != -1 && selectedRow < arrangedObjects.count {
             let album = arrangedObjects[selectedRow]
+            if let observedAlbum {
+                observedAlbum.removeObserver(self, forKeyPath: "tracks")
+                self.observedAlbum = nil
+            }
             tracksController.content = nil
             self.server?.get(album: album)
             
             if album.tracks == nil || album.tracks?.count == 0 {
-                album.addObserver(self, forKeyPath: "tracks", options: [.initial, .prior, .new, .old], context: nil)
+                observedAlbum = album
+                album.addObserver(self, forKeyPath: "tracks", options: [.new], context: nil)
             } else {
                 tracksController.content = album.tracks
             }

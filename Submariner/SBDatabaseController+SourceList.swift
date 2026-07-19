@@ -48,7 +48,7 @@ extension SBDatabaseController {
                 return .copy
             }
         } else if represented is SBDownloads || represented is SBLibrary {
-            if firstTrack.server != nil || (firstTrack.server != nil && firstTrack.localTrack == nil) {
+            if firstTrack.server != nil && !firstTrack.isCached {
                 return .copy
             }
         }

@@ -237,7 +237,10 @@ class SBServerLibraryController: SBServerViewController, NSTableViewDelegate, NS
     
     @objc private func subsonicCoversUpdatedNotification(_ notification: Notification) {
         DispatchQueue.main.async {
-            self.albumsCollectionView.reloadData()
+            guard let albumID = notification.object as? NSManagedObjectID,
+                  let albums = self.albumsController.arrangedObjects as? [SBAlbum],
+                  let index = albums.firstIndex(where: { $0.objectID == albumID }) else { return }
+            self.albumsCollectionView.reloadItems(at: [IndexPath(item: index, section: 0)])
         }
     }
     

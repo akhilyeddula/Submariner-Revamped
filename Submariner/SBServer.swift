@@ -42,34 +42,35 @@ public class SBServer: SBResource {
     @objc dynamic var supportsNowPlaying: NSNumber {
         get {
             // ?? true is because we only set this if overriden to be unsupported
-            return SBServer._supportsNowPlaying[self.objectID] ?? true
+            return synchronized(SBServer.self) { SBServer._supportsNowPlaying[self.objectID] ?? true }
         }
         set {
-            SBServer._supportsNowPlaying[self.objectID] = newValue
+            synchronized(SBServer.self) { SBServer._supportsNowPlaying[self.objectID] = newValue }
         }
     }
     
     @objc dynamic var supportsPodcasts: NSNumber {
         get {
             // ?? true is because we only set this if overriden to be unsupported
-            return SBServer._supportsPodcasts[self.objectID] ?? true
+            return synchronized(SBServer.self) { SBServer._supportsPodcasts[self.objectID] ?? true }
         }
         set {
-            SBServer._supportsPodcasts[self.objectID] = newValue
+            synchronized(SBServer.self) { SBServer._supportsPodcasts[self.objectID] = newValue }
         }
     }
     
     @objc dynamic var supportsFormPost: NSNumber {
         get {
             // we must prove it to be true, hence ?? false
-            return SBServer._supportsFormPost[self.objectID] ?? false
+            return synchronized(SBServer.self) { SBServer._supportsFormPost[self.objectID] ?? false }
         }
         set {
-            SBServer._supportsFormPost[self.objectID] = newValue
+            synchronized(SBServer.self) { SBServer._supportsFormPost[self.objectID] = newValue }
         }
     }
     
     func markNotSupported(feature: SBSubsonicRequestType) {
+        let serverName = resourceName ?? "server"
         switch (feature) {
         case .getOpenSubsonicExtensions:
             // We could check for form POST in another way, but for now just ignore
@@ -85,7 +86,7 @@ public class SBServer: SBResource {
                     let alert = NSAlert()
                     // XXX: suppressable?
                     alert.alertStyle = .warning
-                    alert.informativeText = "Podcasts aren't supported by the server \(self.resourceName ?? "")."
+                    alert.informativeText = "Podcasts aren't supported by the server \(serverName)."
                     alert.messageText = "Unsupported Server Feature"
                     alert.addButton(withTitle: "OK")
                     alert.runModal()
@@ -95,11 +96,12 @@ public class SBServer: SBResource {
             return
         default:
             // this happened possibly unexpectedly, maybe without user interaction. do further special casing from here
+            let featureDescription = String(describing: feature)
             DispatchQueue.main.async {
                 let alert = NSAlert()
                 // XXX: suppressable?
                 alert.alertStyle = .warning
-                alert.informativeText = "The request type \(feature) isn't supported or implemented by the server \(self.resourceName ?? "")."
+                alert.informativeText = "The request type \(featureDescription) isn't supported or implemented by the server \(serverName)."
                 alert.messageText = "Unsupported Server Feature"
                 alert.addButton(withTitle: "OK")
                 alert.runModal()
@@ -245,26 +247,39 @@ public class SBServer: SBResource {
                     ret = cachedPassword
                 } else if let urlString = self.url,
                           let url = URL.init(string: urlString),
-                          let username = self.username,
-                          let host = url.host {
-                    let attribs: [CFString: Any] = [
-                        kSecClass: kSecClassInternetPassword,
-                        kSecAttrServer: host,
-                        kSecAttrAccount: username,
-                        kSecAttrPath: "/",
-                        kSecAttrPort: url.portWithHTTPFallback,
-                        kSecAttrProtocol: url.keychainProtocol,
-                        kSecMatchLimit: kSecMatchLimitOne,
-                        kSecReturnData: NSNumber.init(booleanLiteral: true),
-                        kSecReturnAttributes: NSNumber.init(booleanLiteral: true)
-                    ]
+                          let username = self.username {
+                    var attribs = Self.keychainIdentity(url: url, username: username)
+                    attribs[kSecMatchLimit] = kSecMatchLimitOne
+                    attribs[kSecReturnData] = true
+                    attribs[kSecReturnAttributes] = true
                     var results: AnyObject? = nil
                     logger.info("SBServer.password getter: Getting internet keychain for \(url.absoluteString) user \(username)")
                     let keychainStatus = SecItemCopyMatching(attribs as CFDictionary, &results)
                     if keychainStatus == errSecItemNotFound {
-                        // ok to get unlike other errors
-                        logger.info("SBServer.password getter: Keychain item not found")
-                        ret = nil
+                        // Older versions keyed every credential at "/". Read that identity
+                        // once and migrate it to the server's actual base path.
+                        if Self.keychainPath(for: url) != "/" {
+                            var legacyAttributes = attribs
+                            legacyAttributes[kSecAttrPath] = "/"
+                            var legacyResult: AnyObject?
+                            if SecItemCopyMatching(legacyAttributes as CFDictionary, &legacyResult) == errSecSuccess,
+                               let result = legacyResult as? [CFString: Any],
+                               let data = result[kSecValueData] as? Data,
+                               let password = String(data: data, encoding: .utf8) {
+                                ret = password
+                                synchronized(SBServer.self) {
+                                    SBServer.cachedPasswords[self.objectID] = password
+                                }
+                                updateKeychainPassword()
+                                legacyAttributes.removeValue(forKey: kSecMatchLimit)
+                                legacyAttributes.removeValue(forKey: kSecReturnData)
+                                legacyAttributes.removeValue(forKey: kSecReturnAttributes)
+                                SecItemDelete(legacyAttributes as CFDictionary)
+                            }
+                        }
+                        if ret == nil {
+                            logger.info("SBServer.password getter: Keychain item not found")
+                        }
                     } else if keychainStatus != errSecSuccess {
                         let error = NSError(domain: NSOSStatusErrorDomain, code: Int(keychainStatus))
                         logger.error("SBServer.password getter: Keychain error \(error, privacy: .public)")
@@ -308,18 +323,10 @@ public class SBServer: SBResource {
         if let urlString = self.url,
            let url = URL.init(string: urlString),
            let username = self.username,
-           let password = self.password,
-           let host = url.host {
+           let password = self.password {
             let passwordData = password.data(using: .utf8) ?? Data()
-            var attribs: [CFString: Any] = [
-              kSecClass: kSecClassInternetPassword,
-              kSecAttrServer: host,
-              kSecAttrAccount: username,
-              kSecAttrPath: "/",
-              kSecAttrPort: url.portWithHTTPFallback,
-              kSecAttrProtocol: url.keychainProtocol,
-              kSecValueData: passwordData
-            ]
+            var attribs = Self.keychainIdentity(url: url, username: username)
+            attribs[kSecValueData] = passwordData
             
             logger.info("SBServer.password new URL setter: Setting internet keychain for \(url) user \(username)")
             var ret = SecItemAdd(attribs as CFDictionary, nil)
@@ -345,23 +352,14 @@ public class SBServer: SBResource {
         if let url = self.url,
            let newURL = URL.init(string: url),
            let username = self.username,
-           let password = self.password,
-           let oldHost = oldURL.host,
-           let host = newURL.host {
+           let password = self.password {
             let passwordData = password.data(using: .utf8) ?? Data()
-            let attribs: [CFString: Any] = [
-              kSecClass: kSecClassInternetPassword,
-              kSecAttrServer: oldHost,
-              kSecAttrAccount: oldUsername,
-              kSecAttrPath: "/",
-              kSecAttrPort: oldURL.portWithHTTPFallback,
-              kSecAttrProtocol: oldURL.keychainProtocol,
-              kSecValueData: passwordData
-            ]
+            let attribs = Self.keychainIdentity(url: oldURL, username: oldUsername)
             
             let newAttribs: [CFString: Any] = [
-                kSecAttrServer: host,
+                kSecAttrServer: newURL.host ?? "",
                 kSecAttrAccount: username,
+                kSecAttrPath: Self.keychainPath(for: newURL),
                 kSecAttrPort: newURL.portWithHTTPFallback,
                 kSecAttrProtocol: newURL.keychainProtocol,
                 kSecValueData: passwordData
@@ -385,22 +383,50 @@ public class SBServer: SBResource {
             }
         }
     }
+
+    @objc func deleteKeychainPassword() {
+        guard let urlString = url, let url = URL(string: urlString), let username else { return }
+        let status = SecItemDelete(Self.keychainIdentity(url: url, username: username) as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            let error = NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+            logger.error("Unable to delete server credential: \(error, privacy: .public)")
+        }
+        synchronized(SBServer.self) {
+            SBServer.cachedPasswords.removeValue(forKey: objectID)
+        }
+    }
+
+    private static func keychainPath(for url: URL) -> String {
+        let path = url.path
+        return path.isEmpty ? "/" : path
+    }
+
+    private static func keychainIdentity(url: URL, username: String) -> [CFString: Any] {
+        [
+            kSecClass: kSecClassInternetPassword,
+            kSecAttrServer: url.host ?? "",
+            kSecAttrAccount: username,
+            kSecAttrPath: keychainPath(for: url),
+            kSecAttrPort: url.portWithHTTPFallback,
+            kSecAttrProtocol: url.keychainProtocol
+        ]
+    }
     
     // #MARK: - Subsonic Client (Login)
     
     @objc func connect() {
         let request = SBSubsonicRequestOperation(server: self, request: .ping)
-        request.main()
+        OperationQueue.sharedServerQueue.addOperation(request)
     }
     
     @objc func getOpenSubsonicExtensions() {
         let request = SBSubsonicRequestOperation(server: self, request: .getOpenSubsonicExtensions)
-        request.main()
+        OperationQueue.sharedServerQueue.addOperation(request)
     }
     
     @objc func getServerLicense() {
         let request = SBSubsonicRequestOperation(server: self, request: .getLicense)
-        request.main()
+        OperationQueue.sharedServerQueue.addOperation(request)
     }
     
     static private var cachedBaseParameters: [NSManagedObjectID: [String: String]] = [:]
@@ -515,12 +541,12 @@ public class SBServer: SBResource {
     }
     
     @objc func createPlaylist(name: String, tracks: [SBTrack]) {
-        let request = SBSubsonicRequestOperation(server: self, request: .createPlaylist(name: name, tracks: tracks))
+        let request = SBSubsonicRequestOperation(server: self, request: .createPlaylist(name: name, trackIDs: tracks.compactMap(\.itemId)))
         OperationQueue.sharedServerQueue.addOperation(request)
     }
     
     @objc func updatePlaylist(ID: String, tracks: [SBTrack]) {
-        let request = SBSubsonicRequestOperation(server: self, request: .replacePlaylist(id: ID, tracks: tracks))
+        let request = SBSubsonicRequestOperation(server: self, request: .replacePlaylist(id: ID, trackIDs: tracks.compactMap(\.itemId)))
         OperationQueue.sharedServerQueue.addOperation(request)
     }
     
@@ -530,7 +556,7 @@ public class SBServer: SBResource {
                               comment: String? = nil,
                               appending: [SBTrack]? = nil,
                               removing: [Int]? = nil) {
-        let request = SBSubsonicRequestOperation(server: self, request: .updatePlaylist(id: ID, name: name, comment: comment, isPublic: nil, appending: appending, removing: removing))
+        let request = SBSubsonicRequestOperation(server: self, request: .updatePlaylist(id: ID, name: name, comment: comment, isPublic: nil, appendingIDs: appending?.compactMap(\.itemId), removing: removing))
         OperationQueue.sharedServerQueue.addOperation(request)
     }
     
@@ -540,7 +566,7 @@ public class SBServer: SBResource {
                         isPublic: Bool?,
                         appending: [SBTrack]? = nil,
                         removing: [Int]? = nil) {
-        let request = SBSubsonicRequestOperation(server: self, request: .updatePlaylist(id: ID, name: name, comment: comment, isPublic: isPublic, appending: appending, removing: removing))
+        let request = SBSubsonicRequestOperation(server: self, request: .updatePlaylist(id: ID, name: name, comment: comment, isPublic: isPublic, appendingIDs: appending?.compactMap(\.itemId), removing: removing))
         OperationQueue.sharedServerQueue.addOperation(request)
     }
     
@@ -594,7 +620,8 @@ public class SBServer: SBResource {
     }
     
     @objc func getSimilarTracks(to artist: SBArtist) {
-        let request = SBSubsonicRequestOperation(server: self, request: .getSimilarTracks(artist: artist))
+        guard let artistID = artist.itemId else { return }
+        let request = SBSubsonicRequestOperation(server: self, request: .getSimilarTracks(artistID: artistID, artistName: artist.itemName ?? "Unknown Artist"))
         OperationQueue.sharedServerQueue.addOperation(request)
     }
     
@@ -612,13 +639,19 @@ public class SBServer: SBResource {
     
     func star(tracks: [SBTrack] = [], albums: [SBAlbum] = [], artists: [SBArtist] = [], directories: [SBDirectory] = []) {
         let request = SBSubsonicRequestOperation(server: self,
-                                                 request: .star(tracks: tracks, albums: albums, artists: artists, directories: directories))
+                                                 request: .star(trackIDs: tracks.compactMap(\.itemId),
+                                                                albumIDs: albums.compactMap(\.itemId),
+                                                                artistIDs: artists.compactMap(\.itemId),
+                                                                directoryIDs: directories.compactMap(\.itemId)))
         OperationQueue.sharedServerQueue.addOperation(request)
     }
     
     func unstar(tracks: [SBTrack] = [], albums: [SBAlbum] = [], artists: [SBArtist] = [], directories: [SBDirectory] = []) {
         let request = SBSubsonicRequestOperation(server: self,
-                                                 request: .unstar(tracks: tracks, albums: albums, artists: artists, directories: directories))
+                                                 request: .unstar(trackIDs: tracks.compactMap(\.itemId),
+                                                                  albumIDs: albums.compactMap(\.itemId),
+                                                                  artistIDs: artists.compactMap(\.itemId),
+                                                                  directoryIDs: directories.compactMap(\.itemId)))
         OperationQueue.sharedServerQueue.addOperation(request)
     }
     

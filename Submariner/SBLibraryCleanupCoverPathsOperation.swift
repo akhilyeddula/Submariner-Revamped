@@ -50,7 +50,7 @@ class SBLibraryCleanupCoverPathsOperation: SBOperation, @unchecked Sendable {
     private func cleanupCoverPath(_ cover: SBCover) {
         let baseCoverDir = SBAppDelegate.coverDirectory
         let currentPath = cover.primitiveValue(forKey: "imagePath") as! NSString?
-        // XXX: SBImportOperation was setting this, but SBSubsonicParsingOperation was not
+        // Preserve compatibility with cover paths written by older releases.
         let fallbackPath = cover.primitiveValue(forKey: "path") as! NSString?
         if let currentPath = currentPath ?? fallbackPath, let coversDir = cover.coversDir() {
             // If the path matches the prefix, do it, otherwise move the file

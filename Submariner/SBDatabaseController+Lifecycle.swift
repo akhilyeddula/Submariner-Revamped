@@ -72,9 +72,10 @@ extension SBDatabaseController {
         notificationCenter.addObserver(self, selector: #selector(updateMenuBindings(_:)), name: NSNotification.Name("SBFirstResponderBecame"), object: nil)
         notificationCenter.addObserver(self, selector: #selector(updateMenuBindings(_:)), name: NSNotification.Name("SBFirstResponderNoLonger"), object: nil)
         notificationCenter.addObserver(self, selector: #selector(playerSeekNotification(_:)), name: NSNotification.Name("SBPlaySeekNotification"), object: nil)
+        notificationCenter.addObserver(self, selector: #selector(trackCacheUpdated(_:)), name: .SBTrackCacheUpdated, object: nil)
         
         // setup main box subviews
-        let navItem = SBLocalMusicNavigationItem()
+        let navItem = SBOnboardingNavigationItem()
         self.navigate(to: navItem)
         
         if let lastRightSidebar = UserDefaults.standard.string(forKey: "RightSidebar") {
@@ -144,7 +145,7 @@ extension SBDatabaseController {
             }
         } else if let treeController = object as? NSTreeController, treeController === resourcesController {
             if keyPath == "content" {
-                let predicate = NSPredicate(format: "(resourceName == %@)", "Library")
+                let predicate = NSPredicate(format: "(resourceName == %@)", "Offline")
                 if let section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection {
                     sourceList.expandURIs([section.objectID.uriRepresentation().absoluteString])
                 }
@@ -193,10 +194,14 @@ extension SBDatabaseController {
         if self.shouldShowOnboarding() {
             let navItem = SBOnboardingNavigationItem()
             self.navigate(to: navItem)
-        } else if let resource = lastViewed as? SBResource {
+        } else if let resource = lastViewed as? SBServer {
             self.switchToResource(resource)
+        } else if let playlist = lastViewed as? SBPlaylist, playlist.server != nil {
+            self.switchToResource(playlist)
+        } else if let server = try? managedObjectContext.fetch(SBServer.fetchRequest()).first {
+            self.switchToResource(server)
         } else {
-            let navItem = SBLocalMusicNavigationItem()
+            let navItem = SBOnboardingNavigationItem()
             self.navigate(to: navItem)
         }
         
@@ -207,17 +212,18 @@ extension SBDatabaseController {
     }
 
     @objc func populatedDefaultSections() {
-        // library section
-        var predicate = NSPredicate(format: "(resourceName == %@)", "Library")
+        // Offline cache section. The former local library is intentionally hidden;
+        // server downloads are files in MediaCache, not duplicate Core Data tracks.
+        var predicate = NSPredicate(format: "(resourceName == %@)", "Offline")
         var section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection
         if section == nil {
-            predicate = NSPredicate(format: "(resourceName == %@)", "LIBRARY")
+            predicate = NSPredicate(format: "(resourceName == %@) OR (resourceName == %@) OR (resourceName == %@)", "Library", "LIBRARY", "Offline")
             section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection
             if let sect = section {
-                sect.resourceName = "Library"
+                sect.resourceName = "Offline"
             } else {
                 section = SBSection.insertInManagedObjectContext(context: self.managedObjectContext)
-                section?.resourceName = "Library"
+                section?.resourceName = "Offline"
                 section?.index = 0
             }
         }
@@ -225,14 +231,9 @@ extension SBDatabaseController {
         // library resource
         predicate = NSPredicate(format: "(resourceName == %@)", "Music")
         library = try? self.managedObjectContext.fetch(entityNamed: "Library", predicate: predicate) as? SBLibrary
-        if library == nil {
-            library = SBLibrary.insertInManagedObjectContext(context: self.managedObjectContext)
-            library?.resourceName = "Music"
-            library?.index = 0
-            library?.section = section
-            if let lib = library, let firstStore = self.managedObjectContext.persistentStoreCoordinator?.persistentStores.first {
-                self.managedObjectContext.assign(lib, to: firstStore)
-            }
+        if let library {
+            section?.removeFromResources(library)
+            library.section = nil
         }
         
         // DOWNLOADS resource

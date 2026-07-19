@@ -306,14 +306,15 @@ class SBViewController: NSViewController, NSUserInterfaceValidations {
         var remoteOnly = 0
         
         for track in trackList {
-            var trackToUse = track
-            if let localTrack = track.localTrack {
-                trackToUse = localTrack
-            } else if trackToUse.isLocal?.boolValue == false {
+            if let cachedURL = track.cachedFileURL, track.isCached {
+                tracks.append(cachedURL)
+                continue
+            }
+            if track.isLocal?.boolValue == false {
                 remoteOnly += 1
                 continue
             }
-            if let path = trackToUse.path {
+            if let path = track.path {
                 let trackURL = URL(fileURLWithPath: path)
                 tracks.append(trackURL)
             }
@@ -340,8 +341,8 @@ class SBViewController: NSViewController, NSUserInterfaceValidations {
     @objc func downloadTracks(_ trackList: [SBTrack], databaseController: SBDatabaseController?) {
         var downloaded = 0
         for track in trackList {
-            if track.localTrack != nil || track.isLocal?.boolValue == true {
-                return
+            if track.isCached || track.isLocal?.boolValue == true {
+                continue
             }
             
             if let op = SBSubsonicDownloadOperation(managedObjectContext: self.managedObjectContext, trackID: track.objectID) {
@@ -365,10 +366,10 @@ class SBViewController: NSViewController, NSUserInterfaceValidations {
         var favourited = 0
         
         for track in trackList {
-            if track.isLocal?.boolValue == true || track.localTrack != nil {
+            if track.isLocal?.boolValue == true || track.isCached {
                 showable += 1
             }
-            if track.isLocal?.boolValue == false && track.localTrack == nil {
+            if track.isLocal?.boolValue == false && !track.isCached {
                 downloadable += 1
             }
             if track.starredBool {

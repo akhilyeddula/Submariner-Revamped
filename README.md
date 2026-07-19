@@ -11,8 +11,7 @@ Please see the [old README](https://github.com/Read-Write/Submariner/blob/a1a10e
 
 ## Requirements
 
-* Submariner requires macOS 12 or newer. It works on both Intel and Apple Silicon machines.
-  * The last supported version for macOS 11 is 2.4.2.
+* Submariner requires macOS 26 or newer and Xcode 26 or newer to build.
 * Your Subsonic server must implement API version 1.16.1 or newer. Non-Subsonic implementations are supported, with limited OpenSubsonic extension support.
 
 ## Building
@@ -35,6 +34,14 @@ Doing so isn't fatal (it's not a secret), but it is annoying for other contribut
 
 ### Not yet released
 
+* Make playback, downloads, and server synchronization safe across Core Data queues.
+* Keep downloaded tracks in a server-scoped offline cache instead of duplicating them into a local music library.
+* Remove local music importing and make Subsonic servers the primary app experience.
+* Prevent authentication details from appearing in playback and download logs.
+* Fix playback state transitions, delete-after-play, range requests, and leaked streaming sessions.
+* Prevent albums and cover art from colliding between different servers.
+* Update only the affected album when cover art arrives, improving large-library browsing performance.
+* Fix server credential updates, server deletion cleanup, Now Playing refresh, podcast status changes, and multi-track downloads.
 * Fix playlist tracks showing as empty and 0:00 duration with "No URL" error after clicking on a playlist.
 * Fix keychain password prompts showing repeatedly when loading covers.
 * Menu items have icons on macOS 26.

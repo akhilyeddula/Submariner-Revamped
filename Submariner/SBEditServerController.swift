@@ -53,26 +53,32 @@ import Cocoa
             showErrorAlert(message: "Invalid URL", information: "The URL can't be empty.")
             return
         }
-        guard URLComponents(string: url) != nil else {
+        guard let components = URLComponents(string: url),
+              let scheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              components.host?.isEmpty == false else {
             showErrorAlert(message: "Invalid URL", information: "The URL isn't valid. It should be a full URL including the protocol, hostname, and if needed, port.")
             return
         }
         // username and password must be passed to subsonic, but allowed to be empty in theory
         
-        // validation done
-        super.closeSheet(sender)
-        
-        // XXX: Not sure if PW updates MOC, since PW is not in Core Data anymore
-        if self.managedObjectContext.hasChanges && server.password != oldPassword {
-            if let oldURL = self.oldURL, let oldURLasURL = URL(string: oldURL),
-               let oldUsername = self.oldUsername {
-                server.updateKeychain(oldURL: oldURLasURL, oldUsername: oldUsername)
-            } else {
-                server.updateKeychainPassword()
-            }
-            self.managedObjectContext.commitEditing()
-            try? self.managedObjectContext.save()
+        let identityChanged = server.url != oldURL || server.username != oldUsername
+        let passwordChanged = server.password != oldPassword
+        managedObjectContext.commitEditing()
+        do {
+            try managedObjectContext.save()
+        } catch {
+            NSApp.presentError(error)
+            return
         }
+
+        if identityChanged, let oldURL, let oldURLValue = URL(string: oldURL), let oldUsername {
+            server.updateKeychain(oldURL: oldURLValue, oldUsername: oldUsername)
+        } else if passwordChanged || !editMode {
+            server.updateKeychainPassword()
+        }
+
+        super.closeSheet(sender)
         
         // Invalidate the server's parameters since it could have changed (i.e. token)
         // ...which is held by the client controller owned by the server.

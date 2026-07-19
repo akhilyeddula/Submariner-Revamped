@@ -10,6 +10,7 @@
 import Foundation
 import CoreData
 import UniformTypeIdentifiers
+import CryptoKit
 
 @objc(SBTrack)
 public class SBTrack: SBMusicItem, SBStarrable {
@@ -34,7 +35,9 @@ public class SBTrack: SBMusicItem, SBStarrable {
     }
     
     @objc func streamURL() -> URL? {
-        if let isLocal = self.isLocal, isLocal.boolValue,
+        if let cachedURL = cachedFileURL, FileManager.default.fileExists(atPath: cachedURL.path) {
+            return cachedURL
+        } else if let isLocal = self.isLocal, isLocal.boolValue,
            let path = self.path,
            FileManager.default.fileExists(atPath: path) {
             return URL.init(fileURLWithPath: path)
@@ -91,10 +94,20 @@ public class SBTrack: SBMusicItem, SBStarrable {
     }
     
     @objc var onlineImage: NSImage {
-        if self.localTrack != nil || self.isLocal?.boolValue == true {
+        if isCached || self.isLocal?.boolValue == true {
             return NSImage(systemSymbolName: "bolt.horizontal.fill", accessibilityDescription: "Cached")!
         }
         return NSImage(systemSymbolName: "bolt.horizontal", accessibilityDescription: "Online")!
+    }
+
+    @objc var isCached: Bool {
+        guard let cachedFileURL else { return false }
+        return FileManager.default.fileExists(atPath: cachedFileURL.path)
+    }
+
+    @objc var cachedFileURL: URL? {
+        guard server != nil, itemId != nil else { return nil }
+        return MediaCache.fileURL(for: self)
     }
     
     @objc var starredImage: NSImage? {
@@ -151,5 +164,28 @@ public class SBTrack: SBMusicItem, SBStarrable {
     @objc(insertInManagedObjectContext:) class func insertInManagedObjectContext(context: NSManagedObjectContext) -> SBTrack {
         let entity = NSEntityDescription.entity(forEntityName: "Track", in: context)
         return NSEntityDescription.insertNewObject(forEntityName: entity!.name!, into: context) as! SBTrack
+    }
+}
+
+enum MediaCache {
+    static let directory: URL = {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return base.appendingPathComponent("Submariner/Audio", isDirectory: true)
+    }()
+
+    static func fileURL(for track: SBTrack) -> URL? {
+        guard let server = track.server,
+              let serverURL = server.url,
+              let trackID = track.itemId else { return nil }
+        let profile = UserDefaults.standard.string(forKey: "maxBitRate") ?? "0"
+        let digest = cacheKey(serverURL: serverURL, username: server.username ?? "", trackID: trackID, profile: profile)
+        let rawExtension = track.transcodeSuffix ?? track.contentSuffix ?? "audio"
+        let safeExtension = rawExtension.filter { $0.isLetter || $0.isNumber }.lowercased()
+        return directory.appendingPathComponent(digest).appendingPathExtension(safeExtension.isEmpty ? "audio" : safeExtension)
+    }
+
+    static func cacheKey(serverURL: String, username: String, trackID: String, profile: String) -> String {
+        let identity = [serverURL, username, trackID, profile].joined(separator: "\u{1F}")
+        return SHA256.hash(data: Data(identity.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 }

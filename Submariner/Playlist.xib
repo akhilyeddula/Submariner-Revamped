@@ -271,7 +271,7 @@
                         <action selector="showSelectedInFinder:" target="-2" id="jq4-yR-J1X"/>
                     </connections>
                 </menuItem>
-                <menuItem title="Show in Library" id="Czz-kA-F4W">
+                <menuItem title="Show on Server" id="Czz-kA-F4W">
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <connections>
                         <action selector="showSelectedInLibrary:" target="-2" id="38X-X1-8Rz"/>

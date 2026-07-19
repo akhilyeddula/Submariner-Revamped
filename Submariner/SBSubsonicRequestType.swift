@@ -20,7 +20,7 @@ enum SBSubsonicRequestType: Equatable {
     case updateAlbumList(type: SBAlbumListType)
     case getPlaylist(id: String)
     case deletePlaylist(id: String)
-    case createPlaylist(name: String, tracks: [SBTrack])
+    case createPlaylist(name: String, trackIDs: [String])
     case getNowPlaying
     case search(query: String)
     case updateSearch(existingResult: SBSearchResult)
@@ -29,18 +29,18 @@ enum SBSubsonicRequestType: Equatable {
     case scrobble(id: String)
     case scanLibrary
     case getScanStatus
-    case replacePlaylist(id: String, tracks: [SBTrack])
-    case updatePlaylist(id: String, name: String?, comment: String?, isPublic: Bool?, appending: [SBTrack]?, removing: [Int]?)
+    case replacePlaylist(id: String, trackIDs: [String])
+    case updatePlaylist(id: String, name: String?, comment: String?, isPublic: Bool?, appendingIDs: [String]?, removing: [Int]?)
     case getArtists
     case getArtist(id: String)
     case getAlbum(id: String)
     case getTrack(id: String)
     case getDirectories
     case getDirectory(id: String)
-    case star(tracks: [SBTrack], albums: [SBAlbum], artists: [SBArtist], directories: [SBDirectory])
-    case unstar(tracks: [SBTrack], albums: [SBAlbum], artists: [SBArtist], directories: [SBDirectory])
+    case star(trackIDs: [String], albumIDs: [String], artistIDs: [String], directoryIDs: [String])
+    case unstar(trackIDs: [String], albumIDs: [String], artistIDs: [String], directoryIDs: [String])
     case getTopTracks(artistName: String)
-    case getSimilarTracks(artist: SBArtist)
+    case getSimilarTracks(artistID: String, artistName: String)
     case getStarred
 }
 

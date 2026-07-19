@@ -11,6 +11,17 @@ import CoreData
 import os
 
 extension SBDatabaseController {
+    @objc func trackCacheUpdated(_ notification: Notification) {
+        guard let trackID = notification.object as? NSManagedObjectID,
+              let track = try? managedObjectContext.existingObject(with: trackID) as? SBTrack else {
+            NotificationCenter.default.post(name: .SBPlayerPlaylistUpdated, object: SBPlayer.sharedInstance())
+            return
+        }
+        track.willChangeValue(forKey: "onlineImage")
+        track.didChangeValue(forKey: "onlineImage")
+        let selectedTracks = (rightVC.selectedViewController as? SBViewController)?.selectedTracks
+        NotificationCenter.default.post(name: .SBTrackSelectionChanged, object: selectedTracks)
+    }
     // MARK: - Subsonic Notifications
     @objc func subsonicPlaylistsUpdatedNotification(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in
@@ -63,7 +74,7 @@ extension SBDatabaseController {
 
     @objc func subsonicConnectionFailed(_ notification: Notification) {
         if let attr = notification.object as? [String: Any] {
-            let code = attr["code"] as? Int ?? 0
+            let code = (attr["code"] as? Int) ?? Int(attr["code"] as? String ?? "") ?? 0
             let message = attr["message"] as? String ?? ""
             
             DispatchQueue.main.async { [weak self] in

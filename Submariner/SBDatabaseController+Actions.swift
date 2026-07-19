@@ -7,7 +7,6 @@
 //
 
 import Cocoa
-import UniformTypeIdentifiers
 import CoreData
 
 extension SBDatabaseController {
@@ -26,51 +25,6 @@ extension SBDatabaseController {
             try? self.managedObjectContext.save()
             
             self.switchToResource(s)
-        }
-    }
-
-    // MARK: - File Actions
-    @IBAction func openAudioFiles(_ sender: Any?) {
-        let openPanel = NSOpenPanel()
-        openPanel.canChooseDirectories = true
-        openPanel.canChooseFiles = true
-        openPanel.allowsMultipleSelection = true
-        openPanel.allowedContentTypes = UTTypeReference.audioToolboxTypes
-        
-        openPanel.beginSheetModal(for: self.window!) { [weak self] result in
-            self?.openAudioFilesPanelDidEnd(openPanel, returnCode: result.rawValue, contextInfo: nil)
-        }
-    }
-
-    private func openAudioFilesPanelDidEnd(_ panel: NSOpenPanel, returnCode: Int, contextInfo: UnsafeMutableRawPointer?) {
-        if returnCode == NSApplication.ModalResponse.OK.rawValue {
-            let files = panel.urls
-            if !files.isEmpty {
-                panel.orderOut(self)
-                self.window?.endSheet(panel)
-                
-                _ = self.openImportAlert(self.window!, files: files)
-                
-                if rightVC.selectedViewController !== musicController {
-                    self.showLibraryView(self)
-                }
-            }
-        }
-    }
-
-    func importSheetDidEnd(_ sheet: NSWindow, returnCode: Int, contextInfo: [URL]?) {
-        if returnCode == NSApplication.ModalResponse.alertFirstButtonReturn.rawValue {
-            if let choosedFiles = contextInfo {
-                if let op = SBImportOperation(managedObjectContext: self.managedObjectContext, files: choosedFiles, copyFiles: true) {
-                    OperationQueue.sharedDownloadQueue.addOperation(op)
-                }
-            }
-        } else if returnCode == NSApplication.ModalResponse.alertSecondButtonReturn.rawValue {
-            if let choosedFiles = contextInfo {
-                if let op = SBImportOperation(managedObjectContext: self.managedObjectContext, files: choosedFiles, copyFiles: false) {
-                    OperationQueue.sharedDownloadQueue.addOperation(op)
-                }
-            }
         }
     }
 
@@ -190,7 +144,7 @@ extension SBDatabaseController {
                 if tracklistContainmentBox.contentView === serverUserController.view {
                     self.toggleTrackList(nil)
                 }
-                self.showLibraryView(nil)
+                self.navigate(to: SBOnboardingNavigationItem())
             }
             if let playlist = resource as? SBPlaylist {
                 if let server = playlist.server, let playlistID = playlist.itemId {
@@ -198,6 +152,7 @@ extension SBDatabaseController {
                 }
             }
             if resource is SBPlaylist || resource is SBServer {
+                (resource as? SBServer)?.deleteKeychainPassword()
                 self.managedObjectContext.delete(resource)
                 try? self.managedObjectContext.save()
             }
@@ -207,6 +162,7 @@ extension SBDatabaseController {
     // MARK: - Server Actions
     @IBAction func addServer(_ sender: Any?) {
         sourceList.deselectAll(sender)
+        editServerController.editMode = false
         
         let predicate = NSPredicate(format: "(resourceName == %@)", "Servers")
         if let serversSection = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection {
@@ -419,12 +375,6 @@ extension SBDatabaseController {
         }
     }
 
-    @IBAction func showLibraryView(_ sender: Any?) {
-        if let library = try? self.managedObjectContext.fetch(entityNamed: "Library") as? SBLibrary {
-            self.switchToResource(library)
-        }
-    }
-
     @IBAction func showIndices(_ sender: Any?) {
         guard let server = self.server else { return }
         server.selectedTabIndex = 0
@@ -491,17 +441,12 @@ extension SBDatabaseController {
                     return
                 }
                 navItem = SBServerSearchNavigationItem(server: server, query: query)
-            } else {
-                if let searchItem = topItem as? SBLocalSearchNavigationItem, searchItem.query == query {
-                    return
-                }
-                navItem = SBLocalSearchNavigationItem(query: query)
             }
             if let item = navItem {
                 self.navigate(to: item)
             }
         } else {
-            if rightVC.selectedViewController is SBMusicSearchController || rightVC.selectedViewController is SBServerSearchController {
+            if rightVC.selectedViewController is SBServerSearchController {
                 rightVC.navigateBack(sender)
             }
         }

@@ -96,7 +96,7 @@ import Cocoa
             return SBPlayer.sharedInstance().playlist[row].durationString
         case "online":
             let track = SBPlayer.sharedInstance().playlist[row]
-            if track.localTrack != nil || track.isLocal == true {
+            if track.isCached || track.isLocal == true {
                 return NSImage(systemSymbolName: "bolt.horizontal.fill", accessibilityDescription: "Cached")
             } else {
                 return NSImage(systemSymbolName: "bolt.horizontal", accessibilityDescription: "Online")

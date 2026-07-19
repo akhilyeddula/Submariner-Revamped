@@ -45,7 +45,7 @@ public class SBPlaylist: SBResource {
             return trackURIs?.compactMap { uri in
                 if let moc = self.managedObjectContext {
                     if let oid = moc.persistentStoreCoordinator?.managedObjectID(forURIRepresentation: uri) {
-                        let track = moc.object(with: oid) as? SBTrack
+                        let track = try? moc.existingObject(with: oid) as? SBTrack
                         if track == nil {
                             logger.warning("Failed to cast resolved object for URI: \(uri) to SBTrack")
                         } else {
