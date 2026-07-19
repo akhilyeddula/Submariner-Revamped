@@ -14,7 +14,9 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
 class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
     typealias ParsingCustomization = ((SBSubsonicParsingOperation) -> Void)
     
-    var server: SBServer!
+    private let serverID: NSManagedObjectID
+    private let baseURL: String?
+    private let currentAlbumCount: Int
     
     var parameters: [URLQueryItem] = []
     let request: SBSubsonicRequestType
@@ -23,16 +25,21 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
     // Note that POST method is supported by almost all servers, even Subsonic,
     // but OpenSubsonic API says to check for the extension first.
     let usesPost: Bool
+    private var dataTask: URLSessionDataTask?
+    private var retryWorkItem: DispatchWorkItem?
+    private let maximumRetryCount = 3
     
     init(server: SBServer, request: SBSubsonicRequestType) {
         parameters = server.getBaseQueryItems()
         self.request = request
+        self.serverID = server.objectID
+        self.baseURL = server.url
+        self.currentAlbumCount = server.home?.albums?.count ?? 0
         
         // name is temporary, and we're on the same thread as what passed us this i hope
         let baseName = "Requesting from \(server.resourceName ?? "server")"
         self.usesPost = server.supportsFormPost.boolValue
         super.init(managedObjectContext: server.managedObjectContext!, name: baseName)
-        self.server = threadedContext.object(with: server.objectID) as? SBServer
         
         buildUrl()
         
@@ -46,12 +53,10 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
     private var progressObserver: NSKeyValueObservation?
     
     private func buildFormParams() -> String {
-        self.parameters.map { item in
-            "\(item.name)=\(item.value?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
-        }.joined(separator: "&")
+        SubsonicFormEncoder.encode(parameters)
     }
     
-    private func request(url: URL, type: SBSubsonicRequestType, customization: ParsingCustomization? = nil) {
+    private func request(url: URL, type: SBSubsonicRequestType, customization: ParsingCustomization? = nil, retryCount: Int = 0) {
         let session = URLSession.shared
         var request = URLRequest(url: url)
         if self.usesPost {
@@ -61,7 +66,8 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
         }
         // No auth header needed since we just pass them over query string
         
-        let task = session.dataTask(with: request) { data, response, error in
+        let task = session.dataTask(with: request) { [weak self] data, response, error in
+            guard let self else { return }
             if self.usesPost {
                 logger.info("Handling POST URL \(url, privacy: .public)")
             } else {
@@ -70,12 +76,15 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
                 logger.info("\tAPI endpoint \(url.path, privacy: .public)")
             }
             
-            defer { self.finish() }
-            
             if let error = error {
+                if (error as NSError).code == NSURLErrorCancelled && self.isCancelled {
+                    self.finish()
+                    return
+                }
                 DispatchQueue.main.async {
                     NSApp.presentError(error)
                 }
+                self.finish()
                 return
             } else if let response = response as? HTTPURLResponse {
                 logger.info("\tStatus code is \(response.statusCode)")
@@ -87,7 +96,13 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
                     // uses 501 for features that may be implemented in the future, and 410 for
                     // features that will never be implemented. OwnCloud Music returns a 200 with
                     // a code 70 Subsonic error instead, so we handle that in the response parser.
-                    self.server.markNotSupported(feature: type)
+                    self.threadedContext.perform {
+                        if let server = try? self.threadedContext.existingObject(with: self.serverID) as? SBServer {
+                            server.markNotSupported(feature: type)
+                            self.saveThreadedContext()
+                        }
+                    }
+                    self.finish()
                     return
                 case 429:
                     // Newer versions of Navidrome back getCoverArt w/ third-party APIs.
@@ -109,9 +124,22 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
                     // Use DispatchQueue instead of Timer because this completion handler
                     // runs on a background thread with no run loop. Timer would need a
                     // running RunLoop to fire, which doesn't exist here.
-                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) {
-                        self.request(url: url, type: type, customization: customization)
+                    guard retryCount < self.maximumRetryCount, !self.isCancelled else {
+                        let error = NSError(
+                            domain: NSURLErrorDomain,
+                            code: 429,
+                            userInfo: [NSLocalizedDescriptionKey: "The server rate limit was exceeded after \(self.maximumRetryCount) retries."]
+                        )
+                        DispatchQueue.main.async { NSApp.presentError(error) }
+                        self.finish()
+                        return
                     }
+                    let workItem = DispatchWorkItem { [weak self] in
+                        guard let self, !self.isCancelled else { return }
+                        self.request(url: url, type: type, customization: customization, retryCount: retryCount + 1)
+                    }
+                    self.retryWorkItem = workItem
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay, execute: workItem)
                     return
                 case 200: // OK, continue
                     break
@@ -123,19 +151,26 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
                     DispatchQueue.main.async {
                         NSApp.presentError(error)
                     }
+                    self.finish()
                     return
                 }
                 
-                if let operation = SBSubsonicParsingOperation(managedObjectContext: self.mainContext,
-                                                              requestType: type,
-                                                              server: self.server.objectID,
-                                                              xml: data,
-                                                              mimeType: response.mimeType) {
-                    if let customization = customization {
-                        customization(operation)
+                DispatchQueue.main.async {
+                    if let operation = SBSubsonicParsingOperation(managedObjectContext: self.mainContext,
+                                                                  requestType: type,
+                                                                  server: self.serverID,
+                                                                  xml: data,
+                                                                  mimeType: response.mimeType) {
+                        customization?(operation)
+                        OperationQueue.sharedServerQueue.addOperation(operation)
                     }
-                    OperationQueue.sharedServerQueue.addOperation(operation)
                 }
+                self.finish()
+            } else {
+                let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorBadServerResponse,
+                                    userInfo: [NSLocalizedDescriptionKey: "The server returned an invalid response."])
+                DispatchQueue.main.async { NSApp.presentError(error) }
+                self.finish()
             }
         }
         progressObserver = task.progress.observe(\.fractionCompleted, changeHandler: { progress, change in
@@ -143,12 +178,13 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
                 self.progress = .determinate(n: Float(progress.completedUnitCount), outOf: Float(progress.totalUnitCount))
             }
         })
+        dataTask = task
         task.resume()
     }
     
     override func main() {
         let queryParameters = self.usesPost ? [] : self.parameters
-        guard let baseUrl = server.url else {
+        guard let baseUrl = baseURL else {
             logger.error("Base server URL was nil for request \(String(describing: self.request)), the server URL likely needs to be reset")
             self.finish()
             return
@@ -160,6 +196,13 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
         }
         
         request(url: url, type: self.request, customization: self.customization)
+    }
+
+    override func cancel() {
+        super.cancel()
+        retryWorkItem?.cancel()
+        dataTask?.cancel()
+        finish()
     }
     
     private func buildUrl() {
@@ -190,7 +233,7 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
         case .updateAlbumList(type: let type):
             parameters["type"] = type.subsonicParameter()
             parameters["count"] = String(10)
-            parameters["offset"] = String(server.home?.albums?.count ?? 0)
+            parameters["offset"] = String(currentAlbumCount)
             endpoint = "getAlbumList2"
         case .getPlaylist(id: let id):
             parameters["id"] = id
@@ -204,11 +247,11 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
             customization = { operation in
                 operation.currentPlaylistID = id
             }
-        case .createPlaylist(name: let name, tracks: let tracks):
+        case .createPlaylist(name: let name, trackIDs: let trackIDs):
             parameters["name"] = name
             
             // XXX: DRY this with update
-            parameters += tracks.map { track in URLQueryItem(name: "songId", value: track.itemId) }
+            parameters += trackIDs.map { URLQueryItem(name: "songId", value: $0) }
             
             endpoint = "createPlaylist"
         case .getNowPlaying:
@@ -221,7 +264,7 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
             parameters["artistCount"] = "0"
             endpoint = "search3"
             customization = { operation in
-                operation.currentSearch = SBSearchResult(query: .search(query: query))
+                operation.currentSearch = SBSearchResult(query: .search(query: query), serverID: self.serverID)
             }
         case .updateSearch(existingResult: let existingResult):
             switch existingResult.query {
@@ -254,16 +297,16 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
             endpoint = "startScan"
         case .getScanStatus:
             endpoint = "getScanStatus"
-        case .replacePlaylist(id: let id, tracks: let tracks):
+        case .replacePlaylist(id: let id, trackIDs: let trackIDs):
             parameters["playlistId"] = id
             
-            parameters += tracks.map { track in URLQueryItem(name: "songId", value: track.itemId) }
+            parameters += trackIDs.map { URLQueryItem(name: "songId", value: $0) }
             
             endpoint = "createPlaylist"
             customization = { operation in
                 operation.currentPlaylistID = id
             }
-        case .updatePlaylist(id: let id, name: let name, comment: let comment, isPublic: let isPublic, appending: let appending, removing: let removing):
+        case .updatePlaylist(id: let id, name: let name, comment: let comment, isPublic: let isPublic, appendingIDs: let appendingIDs, removing: let removing):
             parameters["playlistId"] = id
             if let name = name {
                 parameters["name"] = name
@@ -275,7 +318,7 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
                 parameters["public"] = "\(isPublic)"
             }
             
-            parameters += appending?.map { track in URLQueryItem(name: "songIdToAdd", value: track.itemId) } ?? []
+            parameters += appendingIDs?.map { URLQueryItem(name: "songIdToAdd", value: $0) } ?? []
             parameters += removing?.map { index in URLQueryItem(name: "songIndexToRemove", value: "\(index)") } ?? []
             
             endpoint = "updatePlaylist"
@@ -305,35 +348,49 @@ class SBSubsonicRequestOperation: SBOperation, @unchecked Sendable {
         case .getDirectory(id: let id):
             parameters["id"] = id
             endpoint = "getMusicDirectory"
-        case .star(tracks: let tracks, albums: let albums, artists: let artists, directories: let directories):
-            parameters += tracks.map { track in URLQueryItem(name: "id", value: track.itemId) }
-            parameters += directories.map { track in URLQueryItem(name: "id", value: track.itemId) }
-            parameters += albums.map { album in URLQueryItem(name: "albumId", value: album.itemId) }
-            parameters += artists.map { artist in URLQueryItem(name: "artistId", value: artist.itemId) }
+        case .star(trackIDs: let trackIDs, albumIDs: let albumIDs, artistIDs: let artistIDs, directoryIDs: let directoryIDs):
+            parameters += (trackIDs + directoryIDs).map { URLQueryItem(name: "id", value: $0) }
+            parameters += albumIDs.map { URLQueryItem(name: "albumId", value: $0) }
+            parameters += artistIDs.map { URLQueryItem(name: "artistId", value: $0) }
             endpoint = "star"
-        case .unstar(tracks: let tracks, albums: let albums, artists: let artists, directories: let directories):
-            parameters += tracks.map { track in URLQueryItem(name: "id", value: track.itemId) }
-            parameters += directories.map { track in URLQueryItem(name: "id", value: track.itemId) }
-            parameters += albums.map { album in URLQueryItem(name: "albumId", value: album.itemId) }
-            parameters += artists.map { artist in URLQueryItem(name: "artistId", value: artist.itemId) }
+        case .unstar(trackIDs: let trackIDs, albumIDs: let albumIDs, artistIDs: let artistIDs, directoryIDs: let directoryIDs):
+            parameters += (trackIDs + directoryIDs).map { URLQueryItem(name: "id", value: $0) }
+            parameters += albumIDs.map { URLQueryItem(name: "albumId", value: $0) }
+            parameters += artistIDs.map { URLQueryItem(name: "artistId", value: $0) }
             endpoint = "unstar"
         case .getTopTracks(let artistName):
             parameters["artist"] = artistName
             endpoint = "getTopSongs"
             customization = { operation in
-                operation.currentSearch = SBSearchResult(query: .topTracksFor(artistName: artistName))
+                operation.currentSearch = SBSearchResult(query: .topTracksFor(artistName: artistName), serverID: self.serverID)
             }
-        case .getSimilarTracks(let artist):
-            parameters["id"] = artist.itemId
+        case .getSimilarTracks(let artistID, let artistName):
+            parameters["id"] = artistID
             endpoint = "getSimilarSongs2"
             customization = { operation in
-                operation.currentSearch = SBSearchResult(query: .similarTo(artist: artist))
+                operation.currentSearch = SBSearchResult(query: .similarTo(artistID: artistID, artistName: artistName), serverID: self.serverID)
             }
         case .getStarred:
             endpoint = "getStarred2"
             customization = { operation in
-                operation.currentSearch = SBSearchResult(query: .starred)
+                operation.currentSearch = SBSearchResult(query: .starred, serverID: self.serverID)
             }
         }
+    }
+}
+
+enum SubsonicFormEncoder {
+    static func encode(_ parameters: [URLQueryItem]) -> String {
+        parameters.map { item in
+            "\(item.name.formURLEncoded)=\((item.value ?? "").formURLEncoded)"
+        }.joined(separator: "&")
+    }
+}
+
+private extension String {
+    static let formURLAllowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+
+    var formURLEncoded: String {
+        addingPercentEncoding(withAllowedCharacters: Self.formURLAllowedCharacters) ?? ""
     }
 }

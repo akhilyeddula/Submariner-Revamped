@@ -62,7 +62,7 @@
         <attribute name="comment" optional="YES" attributeType="String" syncable="YES"/>
         <attribute name="isPublic" optional="YES" attributeType="Boolean" usesScalarValueType="YES" syncable="YES"/>
         <attribute name="itemId" optional="YES" attributeType="String" elementID="id" syncable="YES"/>
-        <attribute name="trackIDs" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[URL]" syncable="YES"/>
+        <attribute name="trackIDs" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="NSArray" syncable="YES"/>
         <relationship name="server" optional="YES" minCount="1" maxCount="1" deletionRule="Nullify" destinationEntity="Server" inverseName="playlists" inverseEntity="Server" indexed="YES" syncable="YES"/>
     </entity>
     <entity name="Podcast" representedClassName="SBPodcast" parentEntity="MusicItem" syncable="YES" codeGenerationType="category">

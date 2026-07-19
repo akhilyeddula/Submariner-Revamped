@@ -16,8 +16,10 @@ public class SBAlbum: SBMusicItem, SBStarrable {
     
     static let coverCache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
-        NotificationCenter.default.addObserver(forName: NSNotification.Name("SBSubsonicCoversUpdatedNotification"), object: nil, queue: nil) { _ in
-            cache.removeAllObjects()
+        NotificationCenter.default.addObserver(forName: NSNotification.Name("SBSubsonicCoversUpdatedNotification"), object: nil, queue: nil) { notification in
+            if let path = notification.userInfo?["imagePath"] as? String {
+                cache.removeObject(forKey: path as NSString)
+            }
         }
         return cache
     }()

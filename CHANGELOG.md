@@ -2,6 +2,15 @@
 
 All notable changes to the revamped Submariner client will be documented in this file.
 
+## [v0.2.0] - 2026-07-17
+
+### Changed
+- **Decoupled API Client:** Extracted networking methods from the `SBServer` Core Data model into a clean, testable `SubsonicClient` layer.
+- **Modernized XML Parsing:** Replaced the 1,400-line monolithic `XMLParserDelegate` with a hybrid parsing system. Used modular DOM parsing for small standard endpoints and efficient streaming delegates for massive endpoints to prevent memory spikes.
+- **Improved Thread Safety:** Replaced deprecated Objective-C `synchronized()` helper blocks with native locking classes (`NSRecursiveLock`, `NSLock`) and thread-safe Core Data `performAndWait` context boundaries.
+- **Parallel Network Requests:** Increased concurrency on `sharedServerQueue` from 1 to 3 concurrent operations, allowing metadata to load in parallel.
+- **SBViewController Migration Backup:** Created `SBViewController.swift.bak` to preserve translation work for future bottom-up subclass migrations.
+
 ## [v0.1.0] - 2026-07-17
 
 ### Added

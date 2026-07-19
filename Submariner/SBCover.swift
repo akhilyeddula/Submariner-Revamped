@@ -71,7 +71,7 @@ public class SBCover: SBMusicItem {
         get {
             self.willAccessValue(forKey: "imagePath")
             let currentPath = self.primitiveValue(forKey: "imagePath") as! NSString?
-            // XXX: SBImportOperation was setting this, but SBSubsonicParsingOperation was not
+            // Older stores may still contain the legacy path attribute.
             let fallbackPath = self.primitiveValue(forKey: "path") as! NSString?
             if let currentPath = currentPath ?? fallbackPath {
                 if !currentPath.isAbsolutePath, let coversDir = coversDir() {

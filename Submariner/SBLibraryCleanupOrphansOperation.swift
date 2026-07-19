@@ -49,7 +49,7 @@ class SBLibraryCleanupOrphansOperation: SBOperation, @unchecked Sendable {
             if let playlists = try? threadedContext.fetch(playlistRequest) {
                 var trackURIs = Set<URL>()
                 for playlist in playlists {
-                    if let ids = playlist.trackIDs {
+                    if let ids = playlist.trackURIs {
                         trackURIs.formUnion(ids)
                     }
                 }

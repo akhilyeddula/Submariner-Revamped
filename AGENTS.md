@@ -44,6 +44,7 @@ extending the upstream project with a focus on code quality, UX, and feature par
 - All types, methods, and properties should have meaningful, descriptive names.
 - Prefer `async/await` over completion handlers for new code; do not introduce DispatchQueue soup.
 - Use `@MainActor` appropriately for any UI-touching code.
+- **Access Level Discipline**: Every `@IBOutlet`, `@IBAction`, and stored property that is referenced from an extension file must be declared at the `internal` level (the Swift default — no modifier needed) in the primary class file. Do not use `private` on any shared state. Swift extensions in separate files cannot access `private` members of their extended type.
 
 ### Objective-C (Legacy)
 - Do not add new `.h`/`.m` files.

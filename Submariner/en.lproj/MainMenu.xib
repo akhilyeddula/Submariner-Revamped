@@ -76,12 +76,6 @@
                 <menuItem title="File" id="83">
                     <menu key="submenu" title="File" id="81">
                         <items>
-                            <menuItem title="Import Audio Files…" keyEquivalent="o" id="72">
-                                <connections>
-                                    <action selector="openAudioFiles:" target="494" id="537"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem isSeparatorItem="YES" id="547"/>
                             <menuItem title="New Playlist" secondaryImage="music.note.list" catalog="system" keyEquivalent="n" id="538">
                                 <connections>
                                     <action selector="newPlaylist:" target="494" id="540"/>
@@ -345,12 +339,6 @@ CA
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="AoM-Os-fEu"/>
-                            <menuItem title="Local Library" id="Nkt-9e-gbI">
-                                <modifierMask key="keyEquivalentModifierMask"/>
-                                <connections>
-                                    <action selector="showLibraryView:" target="-1" id="sNq-j3-urf"/>
-                                </connections>
-                            </menuItem>
                             <menuItem title="Downloads" id="EDi-sv-Xur">
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>

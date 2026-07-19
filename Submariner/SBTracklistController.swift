@@ -16,7 +16,7 @@ import Cocoa
     
     private var notificationObserver: Any?
     
-    override class func nibName() -> String! {
+    override class func nibName() -> String? {
         "Tracklist"
     }
     
@@ -68,7 +68,7 @@ import Cocoa
         }
     }
     
-    @IBAction func cleanTracklist(_ sender: Any) {
+    @IBAction func cleanTracklist(_ sender: Any?) {
         SBPlayer.sharedInstance().clear()
     }
     
@@ -96,7 +96,7 @@ import Cocoa
             return SBPlayer.sharedInstance().playlist[row].durationString
         case "online":
             let track = SBPlayer.sharedInstance().playlist[row]
-            if track.localTrack != nil || track.isLocal == true {
+            if track.isCached || track.isLocal == true {
                 return NSImage(systemSymbolName: "bolt.horizontal.fill", accessibilityDescription: "Cached")
             } else {
                 return NSImage(systemSymbolName: "bolt.horizontal", accessibilityDescription: "Online")

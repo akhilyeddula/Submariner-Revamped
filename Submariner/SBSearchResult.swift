@@ -11,7 +11,7 @@ import Cocoa
 @objc class SBSearchResult: NSObject {
     enum QueryType: Equatable {
         case search(query: String)
-        case similarTo(artist: SBArtist)
+        case similarTo(artistID: String, artistName: String)
         case topTracksFor(artistName: String)
         case starred
     }
@@ -35,6 +35,7 @@ import Cocoa
     ///
     /// This can be appended to.
     var tracksToFetch: [NSManagedObjectID] = []
+    let serverID: NSManagedObjectID
     
     /// Updates the tracks array after getting the results.
     ///
@@ -45,8 +46,9 @@ import Cocoa
         }
     }
     
-    init(query: QueryType) {
+    init(query: QueryType, serverID: NSManagedObjectID) {
         self.query = query
+        self.serverID = serverID
         super.init()
     }
 }

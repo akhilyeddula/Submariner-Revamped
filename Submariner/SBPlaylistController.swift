@@ -12,7 +12,7 @@ import Cocoa
 
 @objc(SBPlaylistController) class SBPlaylistController: SBViewController, NSTableViewDelegate, NSTableViewDataSource {
     // nulled means this playlist got deleted and hopefully the UI switched away from this VC correctly
-    @objc var playlist: SBPlaylist! {
+    @objc dynamic var playlist: SBPlaylist! {
         didSet {
             if let playlistName = playlist?.resourceName {
                 self.title = "Playlist \"\(playlistName)\""
@@ -26,7 +26,7 @@ import Cocoa
     @IBOutlet var tracksTableView: SBTableView!
     @IBOutlet var tracksController: NSArrayController!
     
-    override class func nibName() -> String! {
+    override class func nibName() -> String? {
         "Playlist"
     }
     
@@ -105,9 +105,9 @@ import Cocoa
             return
         }
         
-        databaseController.addServerPlaylistController.server = server
-        databaseController.addServerPlaylistController.tracks = selectedTracks
-        databaseController.addServerPlaylistController.openSheet(sender)
+        databaseController?.addServerPlaylistController.server = server
+        databaseController?.addServerPlaylistController.tracks = selectedTracks
+        databaseController?.addServerPlaylistController.openSheet(sender)
     }
     
     // #MARK: - NSTableView (Drag & Drop)

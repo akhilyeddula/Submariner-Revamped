@@ -19,28 +19,10 @@ public class SBMusicItem: NSManagedObject {
     // and recreated easily.
     @objc var path: String? {
         get {
-            // FIXME: Refactor this to make sense for direct URL use
-            let libraryDir = SBAppDelegate.musicDirectory.path
             self.willAccessValue(forKey: "path")
-            var ret: String? = self.primitiveValue(forKey: "path") as! String?
-            if let primitivePath = ret,
-               self.isLocal?.boolValue == true {
-                if primitivePath.hasPrefix("/") {
-                    // If absolute path is in music dir, correct it.
-                    if primitivePath.hasPrefix(libraryDir) {
-                        let offset = libraryDir.lengthOfBytes(using: .utf8) + (libraryDir.hasSuffix("/") ? 0 : 1)
-                        let offsetIndex = String.Index(utf16Offset: offset, in: primitivePath)
-                        let trimmedPrefix = String(primitivePath[offsetIndex...])
-                        self.path = trimmedPrefix
-                        ret = trimmedPrefix
-                    }
-                } else {
-                    // relative
-                    ret = libraryDir + "/" + primitivePath
-                }
-            }
+            let ret = self.primitiveValue(forKey: "path") as? String
             self.didAccessValue(forKey: "path")
-            return ret as String?
+            return ret
         }
         set {
             self.willChangeValue(forKey: "path")
