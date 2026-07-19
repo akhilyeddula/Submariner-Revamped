@@ -45,6 +45,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
     var currentAlbum: SBAlbum?
     var currentPodcast: SBPodcast?
     var currentSearch: SBSearchResult?
+    var currentTrack: SBTrack?
     
     var currentPlaylistID: String?
     var currentArtistID: String?
@@ -130,7 +131,9 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         self.threadedContext.processPendingChanges()
         self.saveThreadedContext()
         
-        NotificationCenter.default.post(name: .SBSubsonicCoversUpdated, object: nil)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .SBSubsonicCoversUpdated, object: nil)
+        }
     }
     
     private func mainXML() throws {
@@ -241,12 +244,14 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
                 
                 // this should update and associate directory et al
                 updateTrackDependenciesForTag(track, attributeDict: attributeDict, shouldFetchAlbumArt: false)
+                self.currentTrack = track
             } else {
                 // if the track doesn't exist yet, it'll be born without context. provide that context (artist/album/cover)
                 // FIXME: Should we update *existing* tracks regardless? For previous cases they were pulled anew...
                 logger.info("Creating track with ID: \(id, privacy: .public) for directory ID \(parent, privacy: .public)")
                 let track = createTrack(attributes: attributeDict)
                 updateTrackDependenciesForTag(track, attributeDict: attributeDict, shouldFetchAlbumArt: false)
+                self.currentTrack = track
             }
         }
     }
@@ -283,15 +288,6 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         // We must have a parent (artist) to assign to.
         // Use tag based approach; getAlbumList2 and search3 use this.
         if let artistId = attributeDict["artistId"], let id = attributeDict["id"] {
-            // HACK: Until we properly handle Navidrome BFR/OpenSubsonic multiple artists,
-            // ignore diff artist vs. album artist until it can properly be associated.
-            // Until then, changing the association between artists can confuse the DB.
-            if let currentArtistId = currentArtistID ?? currentArtist?.itemId,
-               artistId != currentArtistId { // artistId implicitly not nil
-                logger.info("Album with ID \(id, privacy: .public) has artist ID \(artistId, privacy: .public), but currently scanning albums for \(currentArtistId, privacy: .public). This may be a non-primary artist for an album, which is an OpenSubsonic extension currently not supported by Submariner.")
-                return
-            }
-            
             var artist = fetchArtist(id: artistId)
             if artist == nil {
                 // handles the different context fine
@@ -299,7 +295,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
                 artist = createArtist(attributes: attributeDict)
             }
             
-            var album = fetchAlbum(id: id, artist: artist)
+            var album = fetchAlbum(id: id)
             if let album = album {
                 updateAlbum(album, attributes: attributeDict)
             } else {
@@ -382,16 +378,16 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         if let currentPlaylist = self.currentPlaylist, let id = attributeDict["id"] {
             let track: SBTrack
             if let fetchedTrack = fetchTrack(id: id) {
-                logger.info("Adding track (and updating) with ID: \(id, privacy: .public) to playlist \(currentPlaylist.itemId ?? "(no ID?)", privacy: .public)")
+                logger.info("Updating track with ID: \(id, privacy: .public) for playlist \(currentPlaylist.itemId ?? "(no ID?)", privacy: .public)")
                 
-                updateTrackDependenciesForTag(fetchedTrack, attributeDict: attributeDict, shouldFetchAlbumArt: false)
+                updateTrackDependenciesForTag(fetchedTrack, attributeDict: attributeDict)
                 track = fetchedTrack
             } else {
                 // if the track doesn't exist yet, it'll be born without context. provide that context (artist/album/cover)
                 // FIXME: Should we update *existing* tracks regardless? For previous cases they were pulled anew...
                 logger.info("Creating new track with ID: \(id, privacy: .public) for playlist \(currentPlaylist.itemId ?? "(no ID?)", privacy: .public)")
                 let newTrack = createTrack(attributes: attributeDict)
-                updateTrackDependenciesForTag(newTrack, attributeDict: attributeDict, shouldFetchAlbumArt: false)
+                updateTrackDependenciesForTag(newTrack, attributeDict: attributeDict)
                 track = newTrack
             }
             
@@ -403,6 +399,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
             }
             
             currentPlaylist.add(track: track)
+            self.currentTrack = track
         } else {
             logger.warning("No current playlist, even though we have an entry element?")
         }
@@ -432,6 +429,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         attachedTrack?.addToNowPlaying(nowPlaying)
         
         updateTrackDependenciesForTag(attachedTrack!, attributeDict: attributeDict)
+        self.currentTrack = attachedTrack
         
         // do it here
         nowPlaying.server = server
@@ -461,12 +459,14 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
                 // objc version did some check in playlist, which didn't make sense
                 currentSearch.tracksToFetch.append(track.objectID)
                 tracksReturned.append(track)
+                self.currentTrack = track
             } else {
                 logger.info("Creating track ID \(id, privacy: .public) for search")
                 let track = createTrack(attributes: attributeDict)
                 updateTrackDependenciesForTag(track, attributeDict: attributeDict, shouldFetchAlbumArt: false)
                 currentSearch.tracksToFetch.append(track.objectID)
                 tracksReturned.append(track)
+                self.currentTrack = track
             }
         } else if let currentAlbum = self.currentAlbum, let id = attributeDict["id"], let name = attributeDict["title"] {
             // like parseElementChildForTrackDirectory; shouldn't need to call update dependencies...
@@ -477,6 +477,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
                 track.album = currentAlbum
                 currentAlbum.addToTracks(track)
                 tracksReturned.append(track)
+                self.currentTrack = track
             } else {
                 // Create
                 logger.info("Creating new track with ID: \(id, privacy: .public) and name \(name, privacy: .public)")
@@ -485,6 +486,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
                 track.album = currentAlbum
                 currentAlbum.addToTracks(track)
                 tracksReturned.append(track)
+                self.currentTrack = track
             }
         } else {
             logger.warning("Song ID was nil for get album or search")
@@ -620,6 +622,25 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
             }
         } else if elementName == "versions" {
             // nop
+        } else if elementName == "genre" {
+            // Child of <genres>, inside <song>/<entry>/<child>.
+            // Maps the FIRST genre to the existing single-value track.genre field.
+            if let track = currentTrack, track.genre == nil || track.genre!.isEmpty,
+               let genreName = attributeDict["name"] {
+                track.genre = genreName
+            }
+        } else if elementName == "genres"
+               || elementName == "albumArtists"
+               || elementName == "contributors"
+               || elementName == "contributor"
+               || elementName == "replayGain"
+               || elementName == "discTitles"
+               || elementName == "discTitle"
+               || elementName == "moods"
+               || elementName == "mood"
+               || elementName == "albumArtist" {
+            // Known OpenSubsonic container/elements or sub-elements with no mappable field.
+            // Silently accepted to suppress logs.
         } else {
             logger.error("Unknown XML element \(elementName, privacy: .public), attributes \(attributeDict, privacy: .public)")
         }
@@ -628,6 +649,8 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
         if elementName == "podcast" {
             currentPodcast = nil
+        } else if elementName == "song" || elementName == "entry" || elementName == "child" {
+            currentTrack = nil
         }
     }
     
@@ -1064,10 +1087,31 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
             }
         }
         
+        // Resolve the album-level artist (albumArtistId takes priority)
+        var albumArtist: SBArtist? = nil
+        if let albumArtistID = attributeDict["albumArtistId"] {
+            albumArtist = fetchArtist(id: albumArtistID)
+            if albumArtist == nil, let albumArtistName = attributeDict["albumArtist"] {
+                logger.info("Creating album artist ID \(albumArtistID, privacy: .public) for tag based entry")
+                let newArtist = SBArtist.insertInManagedObjectContext(context: threadedContext)
+                newArtist.itemId = albumArtistID
+                newArtist.itemName = albumArtistName
+                newArtist.isLocal = false
+                newArtist.server = server
+                server.addToIndexes(newArtist)
+                albumArtist = newArtist
+            }
+        }
+        
+        // Fallback: use track's artistId only if no albumArtistId is present, or if it wasn't resolved.
+        if albumArtist == nil {
+            albumArtist = attachedArtist
+        }
+        
         var attachedAlbum: SBAlbum?
         // same idea
         if let albumID = attributeDict["albumId"] {
-            attachedAlbum = fetchAlbum(id: albumID, artist: attachedArtist)
+            attachedAlbum = fetchAlbum(id: albumID)
             if attachedAlbum == nil, let albumName = attributeDict["albumName"] ?? attributeDict["album"] {
                 logger.info("Creating album ID \(albumID, privacy: .public) for tag based entry")
                 // XXX: Lack of ID seems like it'll be agony
@@ -1075,9 +1119,9 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
                 attachedAlbum!.itemId = albumID
                 attachedAlbum!.itemName = albumName
                 attachedAlbum!.isLocal = false
-                if let attachedArtist = attachedArtist {
-                    attachedAlbum?.artist = attachedArtist
-                    attachedArtist.addToAlbums(attachedAlbum!)
+                if let albumArtist = albumArtist {
+                    attachedAlbum?.artist = albumArtist
+                    albumArtist.addToAlbums(attachedAlbum!)
                 }
                 
                 server.home?.addToAlbums(attachedAlbum!)
@@ -1145,6 +1189,9 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         }
         if let genre = attributes["genre"] {
             track.genre = genre
+        }
+        if let comment = attributes["comment"] {
+            track.comment = comment
         }
         if let sizeString = attributes["size"], let size = Int(sizeString) {
             track.size = NSNumber(value: size)

@@ -162,8 +162,10 @@ class SBServerLibraryController: SBServerViewController, NSTableViewDelegate, NS
                 let urlString = album.objectID.uriRepresentation().absoluteString
                 UserDefaults.standard.set(urlString, forKey: "LastViewedResource")
             }
-        } else if let controller = object as? NSArrayController, controller == tracksController, keyPath == "selectedObjects", self.view.window != nil {
-            NotificationCenter.default.post(name: .SBTrackSelectionChanged, object: tracksController.selectedObjects)
+        } else if let controller = object as? NSArrayController, controller == tracksController, keyPath == "selectedObjects" {
+            if self.view.window != nil {
+                NotificationCenter.default.post(name: .SBTrackSelectionChanged, object: tracksController.selectedObjects)
+            }
         } else if let controller = object as? NSArrayController, controller == albumsController, keyPath == "arrangedObjects" {
             albumsCollectionView.reloadData()
             albumsCollectionView.selectionIndexes = albumsController.selectionIndexes

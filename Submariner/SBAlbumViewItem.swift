@@ -10,11 +10,14 @@
 
 import Cocoa
 import SwiftUI
+import Combine
 import os
 
 fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "SBAlbumViewItem")
 
 @objc(SBAlbumViewItem) class SBAlbumViewItem: NSCollectionViewItem, ObservableObject {
+    @Published var coverUpdateCounter = 0
+    
     private func regenerateView() {
         guard let album = self.album else {
             // item being reused, remove existing view
@@ -23,11 +26,13 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
         }
         
         // use a padding of 4 on the root view as a margin, instead of inserts in collection view flow
-        let newView = AlbumItem(host: self, album: album)
-            .accessibilityLabel(album.itemName ?? "Untitled Album")
-            .padding(4)
-        if let view = view.subviews.first as? NSHostingView<AlbumItem> {
-            view.rootView = newView as! AlbumItem
+        let newView = AnyView(
+            AlbumItem(host: self, album: album)
+                .accessibilityLabel(album.itemName ?? "Untitled Album")
+                .padding(4)
+        )
+        if let hostingView = view.subviews.first as? NSHostingView<AnyView> {
+            hostingView.rootView = newView
         } else {
             // We can't have the hosting view directly be the NSCollectionViewItem's view.
             // Instead, we have to have it as a subview and add constraints,
@@ -44,13 +49,6 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
             ])
         }
         
-        // I'd prefer to do .onTapGesture(2), but that makes SwiftUI eat the normal click events
-        let doubleClickGesture = NSClickGestureRecognizer(target: self, action: #selector(SBAlbumViewItem.doubleClick(_:)))
-        doubleClickGesture.numberOfClicksRequired = 2
-        // Delays normal clicks otherwise
-        doubleClickGesture.delaysPrimaryMouseButtonEvents = false
-        view.addGestureRecognizer(doubleClickGesture)
-        
         if let collectionView = self.collectionView {
             firstResponderObserver = collectionView.observe(\.isFirstResponder, options: [.initial, .new]) { collectionView, change in
                 self.isHostingViewFirstResponder = change.newValue ?? false
@@ -63,7 +61,25 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
         // but do set an empty view here; if not, then calling the view getter in regenerateView will infinite loop
         view = NSView()
         
+        // Setup gesture recognizer once
+        let doubleClickGesture = NSClickGestureRecognizer(target: self, action: #selector(SBAlbumViewItem.doubleClick(_:)))
+        doubleClickGesture.numberOfClicksRequired = 2
+        doubleClickGesture.delaysPrimaryMouseButtonEvents = false
+        view.addGestureRecognizer(doubleClickGesture)
+        
         regenerateView()
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(coversUpdated(_:)), name: .SBSubsonicCoversUpdated, object: nil)
+    }
+    
+    @objc private func coversUpdated(_ notification: Notification) {
+        logger.info("Covers updated notification received in SBAlbumViewItem for: \(self.album?.itemName ?? "nil")")
+        self.objectWillChange.send()
+        coverUpdateCounter += 1
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     override var representedObject: Any? {
@@ -130,6 +146,7 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
                     .aspectRatio(1, contentMode: .fit)
                     .shadow(color: .black, radius: 1, y: 1)
                     .padding(6)
+                    .id(host.coverUpdateCounter)
                     .modify {
                         // This could perhaps use some polish in how it works
                         let helpText = album.starred != nil ? "Favourited" : "Not Favourited"

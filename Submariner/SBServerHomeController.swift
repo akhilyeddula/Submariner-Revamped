@@ -145,7 +145,7 @@ class SBServerHomeController: SBServerViewController, MGScopeBarDelegate, NSTabl
     }
     
     @objc func currentAlbumListType() -> SBAlbumListType {
-        if let selectedItems = scopeBar.selectedItems as? [NSArray],
+        if let selectedItems = scopeBar.selectedItems() as? [NSArray],
            let firstGroup = selectedItems.first as? [String],
            let identifier = firstGroup.first {
             return albumListType(forIdentifier: identifier)
