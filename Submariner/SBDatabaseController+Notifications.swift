@@ -47,19 +47,13 @@ extension SBDatabaseController {
             guard let self = self else { return }
             
             if let playlist = try? self.managedObjectContext.existingObject(with: oid) as? SBPlaylist {
-                print("subsonicPlaylistUpdatedNotification received for playlist: \(playlist.resourceName ?? "nil")")
                 if self.playlistController.playlist?.objectID == playlist.objectID {
-                    print("Playlist matches active playlistController. Reloading UI.")
                     // Re-assign the playlist to force Cocoa Bindings to re-evaluate `playlist.tracks`
                     self.playlistController.playlist = playlist
-                    // Optionally force a fetch and reload
-                    self.playlistController.tracksController.fetch(nil)
+                    self.playlistController.tracksController.rearrangeObjects()
                     self.playlistController.tracksTableView.reloadData()
-                } else {
-                    print("Playlist does NOT match active playlistController. Active: \(self.playlistController.playlist?.resourceName ?? "nil")")
                 }
             } else if let server = try? self.managedObjectContext.existingObject(with: oid) as? SBServer {
-                print("subsonicPlaylistUpdatedNotification received for server: \(server.resourceName ?? "nil")")
                 server.getServerPlaylists()
             }
         }

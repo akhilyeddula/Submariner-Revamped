@@ -142,6 +142,7 @@
 		4CC6B56914041F7E003AEAC0 /* ServerPodcasts.xib in Resources */ = {isa = PBXBuildFile; fileRef = 4CC6B56714041F7E003AEAC0 /* ServerPodcasts.xib */; };
 		4CCF7FF013B673CA00954C6E /* ServerSearch.xib in Resources */ = {isa = PBXBuildFile; fileRef = 4CCF7FEE13B673C900954C6E /* ServerSearch.xib */; };
 		4CFAFC2C139EF08800E82B57 /* SBServerHomeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CFAFC2A139EF08800E82B57 /* SBServerHomeController.swift */; };
+		A2B3C4D5E6F708192A3B4C5D /* HomeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2B3C4D5E6F708192A3B4C5E /* HomeController.swift */; };
 		4CFAFC2D139EF08800E82B57 /* ServerHome.xib in Resources */ = {isa = PBXBuildFile; fileRef = 4CFAFC2B139EF08800E82B57 /* ServerHome.xib */; };
 		4CFAFC37139EF20600E82B57 /* MGScopeBar.m in Sources */ = {isa = PBXBuildFile; fileRef = 4CFAFC33139EF20500E82B57 /* MGScopeBar.m */; };
 		4CFAFC38139EF20600E82B57 /* MGRecessedPopUpButtonCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 4CFAFC36139EF20500E82B57 /* MGRecessedPopUpButtonCell.m */; };
@@ -335,6 +336,7 @@
 		4CC6B56714041F7E003AEAC0 /* ServerPodcasts.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = ServerPodcasts.xib; sourceTree = "<group>"; };
 		4CCF7FEE13B673C900954C6E /* ServerSearch.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = ServerSearch.xib; sourceTree = "<group>"; };
 		4CFAFC2A139EF08800E82B57 /* SBServerHomeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SBServerHomeController.swift"; sourceTree = "<group>"; };
+		A2B3C4D5E6F708192A3B4C5E /* HomeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeController.swift; sourceTree = "<group>"; };
 		4CFAFC2B139EF08800E82B57 /* ServerHome.xib */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.xib; path = ServerHome.xib; sourceTree = "<group>"; };
 		4CFAFC32139EF20500E82B57 /* MGScopeBar.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MGScopeBar.h; sourceTree = "<group>"; };
 		4CFAFC33139EF20500E82B57 /* MGScopeBar.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MGScopeBar.m; sourceTree = "<group>"; };
@@ -742,6 +744,7 @@
 		4CFB3EF5139D46AC008DC01A /* View Controllers */ = {
 			isa = PBXGroup;
 			children = (
+				A2B3C4D5E6F708192A3B4C5E /* HomeController.swift */,
 				4C7AA24B139D64920050BE95 /* SBServerLibraryController.swift */,
 				4CFAFC2A139EF08800E82B57 /* SBServerHomeController.swift */,
 				4CC6B56614041F7E003AEAC0 /* SBServerPodcastController.swift */,
@@ -884,6 +887,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A2B3C4D5E6F708192A3B4C5D /* HomeController.swift in Sources */,
 				3EC03AC329F33C68001FDE50 /* OperationQueue+Shared.swift in Sources */,
 				3E2E1C842A395B79001A3148 /* SBSubsonicRequestOperation.swift in Sources */,
 				3EC03B3829F4F2E0001FDE50 /* SBHome.swift in Sources */,

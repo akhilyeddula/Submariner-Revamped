@@ -274,7 +274,7 @@
                     <toolbarItem implicitItemIdentifier="EE6E6CE1-FB9F-4853-A706-7715B7C05F13" explicitItemIdentifier="SBTBScrubber" label="Position" paletteLabel="Position" sizingBehavior="auto" id="xeN-ij-0rW">
                         <nil key="toolTip"/>
                         <slider key="view" verticalHuggingPriority="750" id="268">
-                            <rect key="frame" x="0.0" y="14" width="191" height="16"/>
+                            <rect key="frame" x="0.0" y="14" width="260" height="16"/>
                             <autoresizingMask key="autoresizingMask"/>
                             <sliderCell key="cell" enabled="NO" state="on" alignment="left" maxValue="100" tickMarkPosition="above" sliderType="linear" id="280"/>
                             <connections>

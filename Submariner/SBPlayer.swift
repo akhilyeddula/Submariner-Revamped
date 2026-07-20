@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import AppKit
 import AVFoundation
 import UserNotifications
 import MediaPlayer
@@ -396,27 +397,36 @@ extension NSNotification.Name {
             content.title = currentTrack.itemName ?? ""
             content.body = subtitle
             
-            // Add a cover image, fetch from our local cache since this API won't take an NSImage
-            // XXX: Fetch from SBAlbum. The cover in SBTrack is seemingly only used for requests.
-            // This means there's also a bunch of empty dupe cover objects in the DB...
-            if let newCover = currentTrack.album?.cover, let coverPath = newCover.imagePath {
-                let coverURL = URL(fileURLWithPath: coverPath as String)
-                // macOS 15 starts deleting attachment files; make a copy in temp dir to avoid this fate
-                let tempURL = URL.temporaryFile(fileExtension: coverURL.pathExtension)
-                do {
-                    try FileManager.default.copyItem(at: coverURL,
-                                                      to: tempURL)
-                    let attachment = try UNNotificationAttachment(identifier: "", url: tempURL)
-                    content.attachments = [attachment]
-                } catch {
-                    // if we fail, then just skip making an attachment
-                }
+            if let attachment = notificationAttachment(for: currentTrack) {
+                content.attachments = [attachment]
             }
             
             // an interval of 0 faults
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
             let request = UNNotificationRequest(identifier: "SubmarinerNowPlayingNotification", content: content, trigger: trigger)
             centre.add(request)
+        }
+    }
+
+    private func notificationAttachment(for track: SBTrack) -> UNNotificationAttachment? {
+        guard let coverPath = track.album?.cover?.imagePath as String?,
+              let image = NSImage(contentsOfFile: coverPath),
+              let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+
+        // Notification Center does not reliably accept every server-provided
+        // image format (notably WebP), even though AppKit can display it. Give
+        // it a normalized PNG in a disposable location instead.
+        let temporaryURL = URL.temporaryFile(fileExtension: "png")
+        do {
+            try pngData.write(to: temporaryURL, options: .atomic)
+            return try UNNotificationAttachment(identifier: "AlbumArtwork", url: temporaryURL)
+        } catch {
+            logger.error("Unable to attach album artwork to notification: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
     

@@ -53,7 +53,11 @@ import Cocoa
     // MARK: - Create Views
     
     var icon: NSImage? {
-        if resource is SBLibrary {
+        if resource.section?.resourceName == "Browse", resource.resourceName == "Home" {
+            return NSImage(systemSymbolName: "house.fill", accessibilityDescription: "Home")
+        } else if resource.section?.resourceName == "Browse", resource.resourceName == "Artists" {
+            return NSImage(systemSymbolName: "person.2.fill", accessibilityDescription: "Artists")
+        } else if resource is SBLibrary {
             return NSImage(systemSymbolName: "music.note", accessibilityDescription: "Local Library")
         } else if resource is SBPlaylist {
             return NSImage(systemSymbolName: "music.note.list", accessibilityDescription: "Playlist")

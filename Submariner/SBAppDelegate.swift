@@ -119,6 +119,20 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
         self.managedObjectContext = NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType)
         self.managedObjectContext.persistentStoreCoordinator = self.persistentStoreCoordinator
         self.managedObjectContext.automaticallyMergesChangesFromParent = true
+
+        // Playback indicators describe the current process only. Clear any
+        // values left behind by the previous session before creating the UI.
+        let playingTracksRequest: NSFetchRequest<SBTrack> = SBTrack.fetchRequest()
+        playingTracksRequest.predicate = NSPredicate(format: "isPlaying == YES")
+        do {
+            let playingTracks = try self.managedObjectContext.fetch(playingTracksRequest)
+            playingTracks.forEach { $0.isPlaying = false }
+            if !playingTracks.isEmpty {
+                try self.managedObjectContext.save()
+            }
+        } catch {
+            logger.error("Unable to clear stale playback indicators: \(error.localizedDescription, privacy: .public)")
+        }
         
         // #MARK: Run cleanup steps
         if !Self.isRunningTests {
@@ -130,7 +144,7 @@ fileprivate let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, catego
         
         // #MARK: Init Window Controllers
         self.databaseController = SBDatabaseController(managedObjectContext: self.managedObjectContext)
-        self.preferencesController = SBPreferencesController()
+        self.preferencesController = SBPreferencesController(managedObjectContext: self.managedObjectContext)
     }
     
     // #MARK: - NSApplicationDelegate

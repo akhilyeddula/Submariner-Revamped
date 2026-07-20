@@ -34,6 +34,12 @@ Doing so isn't fatal (it's not a secret), but it is annoying for other contribut
 
 ### Not yet released
 
+* Reopen the last selected view, show a cached personalized Home, organize server artists and playlists in the sidebar, and manage the single supported server from Settings.
+* Fix playback bar seeking across the full track and make the scrubber easier to use.
+* Restore the last server view without briefly showing onboarding and clear stale playing indicators at launch.
+* Show newly loaded album artwork in the inspector for songs selected from Subsonic playlists.
+* Show album artwork in now-playing notifications, including covers supplied as WebP images.
+* Show a restored Subsonic playlist immediately on first selection after launch.
 * Make playback, downloads, and server synchronization safe across Core Data queues.
 * Keep downloaded tracks in a server-scoped offline cache instead of duplicating them into a local music library.
 * Remove local music importing and make Subsonic servers the primary app experience.

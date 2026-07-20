@@ -12,20 +12,16 @@ import CoreData
 extension SBDatabaseController {
     // MARK: - Demo Server Action
     @IBAction func createDemoServer(_ sender: Any?) {
-        let predicate = NSPredicate(format: "(resourceName == %@)", "Servers")
-        if let serversSection = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection {
+        guard (try? managedObjectContext.count(for: SBServer.fetchRequest())) == 0 else { return }
             let s = SBServer.insertInManagedObjectContext(context: self.managedObjectContext)
             s.resourceName = "Subsonic Demo"
             s.url = "http://demo.subsonic.org/"
             s.username = "guest1"
             s.password = "guest"
             s.updateKeychainPassword()
-            s.section = serversSection
-            serversSection.addToResources(s)
             try? self.managedObjectContext.save()
             
             self.switchToResource(s)
-        }
     }
 
     // MARK: - Right Sidebar Toggles
@@ -81,42 +77,27 @@ extension SBDatabaseController {
 
     // MARK: - Playlist Actions
     @IBAction func addPlaylist(_ sender: Any?) {
-        let predicate = NSPredicate(format: "(resourceName == %@)", "Playlists")
-        if let playlistsSection = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection {
-            let newPlaylist = SBPlaylist.insertInManagedObjectContext(context: self.managedObjectContext)
-            newPlaylist.resourceName = "New Playlist"
-            newPlaylist.section = playlistsSection
-            playlistsSection.addToResources(newPlaylist)
-            
-            sourceList.expandURIs([playlistsSection.objectID.uriRepresentation().absoluteString])
-        }
+        guard let server = try? managedObjectContext.fetch(SBServer.fetchRequest()).first else { return }
+        addServerPlaylistController.server = server
+        addServerPlaylistController.openSheet(sender)
     }
 
     @IBAction func addRemotePlaylist(_ sender: Any?) {
-        if let server = self.sourceListSelectedResource() as? SBServer {
-            addServerPlaylistController.server = server
-            addServerPlaylistController.openSheet(sender)
-        }
+        addPlaylist(sender)
     }
 
     @IBAction func addPlaylistToCurrentServer(_ sender: Any?) {
-        if let server = self.server {
+        if let server = self.server ?? (try? managedObjectContext.fetch(SBServer.fetchRequest()).first) {
             addServerPlaylistController.server = server
             addServerPlaylistController.openSheet(sender)
         }
     }
 
     @IBAction func addPlaylistFromTracklist(_ sender: Any?) {
-        let predicate = NSPredicate(format: "(resourceName == %@)", "Playlists")
-        if let playlistsSection = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection {
-            let newPlaylist = SBPlaylist.insertInManagedObjectContext(context: self.managedObjectContext)
-            newPlaylist.resourceName = "New Saved Tracklist"
-            newPlaylist.section = playlistsSection
-            newPlaylist.tracks = SBPlayer.sharedInstance().playlist
-            playlistsSection.addToResources(newPlaylist)
-            
-            sourceList.expandURIs([playlistsSection.objectID.uriRepresentation().absoluteString])
-        }
+        guard let server = try? managedObjectContext.fetch(SBServer.fetchRequest()).first else { return }
+        addServerPlaylistController.server = server
+        addServerPlaylistController.tracks = SBPlayer.sharedInstance().playlist
+        addServerPlaylistController.openSheet(sender)
     }
 
     @IBAction func removeItem(_ sender: Any?) {
@@ -161,28 +142,11 @@ extension SBDatabaseController {
 
     // MARK: - Server Actions
     @IBAction func addServer(_ sender: Any?) {
-        sourceList.deselectAll(sender)
-        editServerController.editMode = false
-        
-        let predicate = NSPredicate(format: "(resourceName == %@)", "Servers")
-        if let serversSection = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection {
-            let newServer = SBServer.insertInManagedObjectContext(context: self.managedObjectContext)
-            newServer.resourceName = "New Server"
-            newServer.section = serversSection
-            serversSection.addToResources(newServer)
-            
-            sourceList.expandURIs([serversSection.objectID.uriRepresentation().absoluteString])
-            
-            editServerController.server = newServer
-            editServerController.openSheet(sender)
-        }
+        (NSApp.delegate as? SBAppDelegate)?.preferencesController.showServerSettings(sender)
     }
 
     @IBAction func configureCurrentServer(_ sender: Any?) {
-        guard let server = self.server else { return }
-        editServerController.editMode = true
-        editServerController.server = server
-        editServerController.openSheet(sender)
+        (NSApp.delegate as? SBAppDelegate)?.preferencesController.showServerSettings(sender)
     }
 
     @IBAction func renameItem(_ sender: Any?) {
@@ -281,7 +245,7 @@ extension SBDatabaseController {
     @IBAction func seekTime(_ sender: Any?) {
         let player = SBPlayer.sharedInstance()
         if player.isPlaying, let slider = sender as? NSSlider {
-            player.seek(to: slider.doubleValue)
+            player.seek(percentage: slider.doubleValue)
         }
     }
 

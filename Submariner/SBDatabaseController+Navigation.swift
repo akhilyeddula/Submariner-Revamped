@@ -55,7 +55,13 @@ extension SBDatabaseController {
         UserDefaults.standard.set(urlString, forKey: "LastViewedResource")
         
         var navItem: SBNavigationItem? = nil
-        if resource is SBLibrary {
+        let sidebarItem = resource as? SBResource
+        if sidebarItem?.section?.resourceName == "Browse", sidebarItem?.resourceName == "Home" {
+            navItem = HomeNavigationItem()
+        } else if sidebarItem?.section?.resourceName == "Browse", sidebarItem?.resourceName == "Artists",
+                  let server = try? managedObjectContext.fetch(SBServer.fetchRequest()).first {
+            navItem = ArtistsNavigationItem(server: server)
+        } else if resource is SBLibrary {
             return
         } else if resource is SBDownloads {
             navItem = SBDownloadsNavigationItem()
@@ -101,6 +107,13 @@ extension SBDatabaseController {
             sidebarResource = server
         } else if let track = sidebarResource as? SBTrack, let server = track.server {
             sidebarResource = server
+        }
+        if sidebarResource is SBServer,
+           let artists = try? managedObjectContext.fetch(
+            entityNamed: "Resource",
+            predicate: NSPredicate(format: "resourceName == %@ AND section.resourceName == %@", "Artists", "Browse")
+           ) as? SBResource {
+            sidebarResource = artists
         }
         
         let newPath = resourcesController.indexPath(for: sidebarResource) as IndexPath?
@@ -160,16 +173,38 @@ extension SBDatabaseController {
     func pageController(_ pageController: NSPageController, prepare viewController: NSViewController, with object: Any?) {
         if let navItem = object as? SBServerLibraryNavigationItem {
             serverLibraryController.server = navItem.server
+        } else if let navItem = object as? SBPlaylistNavigationItem {
+            // Configure the binding source before AppKit displays the page.
+            // Waiting until didTransitionTo leaves the first playlist page
+            // empty for one navigation cycle.
+            playlistController.playlist = navItem.playlist
         }
         viewController.viewDidAppear()
     }
 
     func pageController(_ pageController: NSPageController, didTransitionTo object: Any) {
         guard let navItem = object as? SBNavigationItem else { return }
+        UserDefaults.standard.set(navItem.identifier, forKey: "LastNavigationIdentifier")
         
         if let serverNavItem = navItem as? SBServerNavigationItem {
             self.server = serverNavItem.server
-            self.updateSourceListSelection(serverNavItem.server)
+            switch navItem {
+            case is SBServerLibraryNavigationItem: self.server?.selectedTabIndex = 0
+            case is SBServerHomeNavigationItem: self.server?.selectedTabIndex = 1
+            case is SBServerPodcastsNavigationItem: self.server?.selectedTabIndex = 2
+            case is SBServerDirectoriesNavigationItem: self.server?.selectedTabIndex = 3
+            case is SBServerSearchNavigationItem: self.server?.selectedTabIndex = 4
+            default: break
+            }
+            if navItem is ArtistsNavigationItem,
+               let artists = try? managedObjectContext.fetch(
+                entityNamed: "Resource",
+                predicate: NSPredicate(format: "resourceName == %@ AND section.resourceName == %@", "Artists", "Browse")
+               ) as? SBResource {
+                self.updateSourceListSelection(artists)
+            } else {
+                self.updateSourceListSelection(serverNavItem.server)
+            }
         } else if let playlistNavItem = navItem as? SBPlaylistNavigationItem {
             let playlist = playlistNavItem.playlist
             self.server = playlist.server
@@ -269,6 +304,8 @@ extension SBDatabaseController {
             return onboardingController
         case "Downloads":
             return downloadsController
+        case "Home":
+            return homeController
         case "ServerLibrary":
             return serverLibraryController
         case "ServerHome":

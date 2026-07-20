@@ -154,14 +154,28 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
             try data.write(to: fileName, options: [.atomic])
             logger.info("Wrote cover file \(fileName, privacy: .public)")
             
-            if let cover = fetchCover(coverID: currentCoverID) {
-                // reset album in weird circumstance where it's not associated
-                if let currentAlbumID = self.currentAlbumID, let album = fetchAlbum(id: currentAlbumID) {
-                    cover.album = album
-                    album.cover = cover
-                }
+            let album = currentAlbumID.flatMap { fetchAlbum(id: $0) }
+            var cover = album?.cover ?? fetchCover(coverID: currentCoverID)
+
+            // Playlist responses can create an album before all of its artist
+            // relationships are available. Resolve the cover from the album ID
+            // carried by the request instead of relying on that relationship
+            // chain, and repair any missing or stale cover association.
+            if cover == nil, let album {
+                cover = createCover(attributes: ["coverArt": currentCoverID])
+                cover?.album = album
+                album.cover = cover
+            } else if let cover, let album {
+                cover.album = album
+                album.cover = cover
+            }
+
+            if let cover {
+                cover.itemId = currentCoverID
                 cover.imagePath = fileName.lastPathComponent as NSString
                 logger.info("Set cover \(currentCoverID, privacy: .public) to file \(fileName, privacy: .public)")
+            } else {
+                logger.error("Downloaded cover \(currentCoverID, privacy: .public) could not be associated with an album")
             }
         }
         
@@ -1363,6 +1377,7 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         if let name = attributes["name"] {
             playlist.resourceName = name
         }
+        attachPlaylistToSidebar(playlist)
     }
     
     private func createPlaylist(attributes: [String: String]) -> SBPlaylist {
@@ -1372,8 +1387,16 @@ class SBSubsonicParsingOperation: SBOperation, XMLParserDelegate, @unchecked Sen
         
         playlist.server = server
         server.addToPlaylists(playlist)
+        attachPlaylistToSidebar(playlist)
         
         return playlist
+    }
+
+    private func attachPlaylistToSidebar(_ playlist: SBPlaylist) {
+        let request = NSFetchRequest<SBSection>(entityName: "Section")
+        request.predicate = NSPredicate(format: "resourceName == %@", "Playlists")
+        request.fetchLimit = 1
+        playlist.section = try? threadedContext.fetch(request).first
     }
     
     private func createNowPlaying(attributes: [String: String]) -> SBNowPlaying  {

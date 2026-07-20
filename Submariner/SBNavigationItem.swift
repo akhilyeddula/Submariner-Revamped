@@ -26,6 +26,8 @@ import Cocoa
     @objc var selectedMusicItem: SBMusicItem?
 }
 
+@objc class ArtistsNavigationItem: SBServerLibraryNavigationItem {}
+
 @objc class SBServerSearchNavigationItem: SBServerNavigationItem {
     override var identifier: String { "ServerSearch" }
     
@@ -100,6 +102,10 @@ import Cocoa
 
 @objc class SBDownloadsNavigationItem: SBNavigationItem {
     override var identifier: String { "Downloads" }
+}
+
+@objc class HomeNavigationItem: SBNavigationItem {
+    override var identifier: String { "Home" }
 }
 
 @objc class SBOnboardingNavigationItem: SBNavigationItem {

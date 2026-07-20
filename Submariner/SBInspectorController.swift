@@ -35,11 +35,16 @@ extension NSNotification.Name {
                                                selector: #selector(SBInspectorController.playlistSelectionChange(notification:)),
                                                name: .SBPlaylistSelectionChanged,
                                                object: nil)
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(SBInspectorController.coverUpdated(notification:)),
+                                               name: .SBSubsonicCoversUpdated,
+                                               object: nil)
     }
     
     deinit {
         NotificationCenter.default.removeObserver(self, name: .SBTrackSelectionChanged, object: nil)
         NotificationCenter.default.removeObserver(self, name: .SBPlaylistSelectionChanged, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .SBSubsonicCoversUpdated, object: nil)
     }
     
     @objc private func trackSelectionChange(notification: Notification) {
@@ -50,6 +55,14 @@ extension NSNotification.Name {
     
     @objc private func playlistSelectionChange(notification: Notification) {
         self.selectedPlaylist = notification.object as? SBPlaylist
+    }
+
+    @objc private func coverUpdated(notification: Notification) {
+        guard let albumID = notification.object as? NSManagedObjectID else { return }
+        let selectedAlbumIDs = selectedTracks.compactMap(\.album?.objectID)
+        let nowPlayingAlbumID = SBPlayer.sharedInstance().currentTrack?.album?.objectID
+        guard selectedAlbumIDs.contains(albumID) || nowPlayingAlbumID == albumID else { return }
+        objectWillChange.send()
     }
     
     @Published var selectedTracks: [SBTrack] = []

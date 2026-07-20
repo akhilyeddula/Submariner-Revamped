@@ -73,10 +73,12 @@ extension SBDatabaseController {
         notificationCenter.addObserver(self, selector: #selector(updateMenuBindings(_:)), name: NSNotification.Name("SBFirstResponderNoLonger"), object: nil)
         notificationCenter.addObserver(self, selector: #selector(playerSeekNotification(_:)), name: NSNotification.Name("SBPlaySeekNotification"), object: nil)
         notificationCenter.addObserver(self, selector: #selector(trackCacheUpdated(_:)), name: .SBTrackCacheUpdated, object: nil)
-        
-        // setup main box subviews
-        let navItem = SBOnboardingNavigationItem()
-        self.navigate(to: navItem)
+
+        // NSPageController needs an initial object before forward navigation can
+        // transition to a real page. Use the neutral temporary controller so
+        // launch restoration does not briefly display onboarding.
+        rightVC.arrangedObjects = [SBNavigationItem()]
+        rightVC.selectedIndex = 0
         
         if let lastRightSidebar = UserDefaults.standard.string(forKey: "RightSidebar") {
             if lastRightSidebar == "ServerUsers" {
@@ -88,7 +90,7 @@ extension SBDatabaseController {
             }
         }
         
-        resourcesController.addObserver(self, forKeyPath: "content", options: .new, context: nil)
+        resourcesController.addObserver(self, forKeyPath: "content", options: [.initial, .new], context: nil)
 
     }
 
@@ -154,6 +156,11 @@ extension SBDatabaseController {
                 if let section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: playlistsPredicate) as? SBSection {
                     sourceList.expandURIs([section.objectID.uriRepresentation().absoluteString])
                 }
+
+                let browsePredicate = NSPredicate(format: "(resourceName == %@)", "Browse")
+                if let section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: browsePredicate) as? SBSection {
+                    sourceList.expandURIs([section.objectID.uriRepresentation().absoluteString])
+                }
                 
                 if let savedExpanded = UserDefaults.standard.array(forKey: "NSOutlineView Items SourceList") as? [String] {
                     sourceList.expandURIs(savedExpanded)
@@ -194,28 +201,84 @@ extension SBDatabaseController {
         if self.shouldShowOnboarding() {
             let navItem = SBOnboardingNavigationItem()
             self.navigate(to: navItem)
-        } else if let resource = lastViewed as? SBServer {
-            self.switchToResource(resource)
-        } else if let playlist = lastViewed as? SBPlaylist, playlist.server != nil {
-            self.switchToResource(playlist)
+        } else if let resource = lastViewed as? SBResource {
+            restore(resource: resource)
         } else if let server = try? managedObjectContext.fetch(SBServer.fetchRequest()).first {
             self.switchToResource(server)
         } else {
             let navItem = SBOnboardingNavigationItem()
             self.navigate(to: navItem)
         }
-        
-        if rightVC.arrangedObjects.count > 1 {
-            rightVC.arrangedObjects = [rightVC.arrangedObjects[0]]
+
+        // The placeholder only establishes the page controller's initial
+        // state; it should not remain in back-navigation history.
+        if rightVC.arrangedObjects.count > 1, let restoredItem = rightVC.arrangedObjects.last {
+            rightVC.arrangedObjects = [restoredItem]
+            rightVC.selectedIndex = 0
         }
-        rightVC.selectedIndex = 0
+    }
+
+    private func restore(resource: SBResource) {
+        guard let identifier = UserDefaults.standard.string(forKey: "LastNavigationIdentifier"),
+              let server = resource as? SBServer else {
+            switchToResource(resource)
+            return
+        }
+
+        let navigationItem: SBNavigationItem
+        switch identifier {
+        case "ServerHome": navigationItem = SBServerHomeNavigationItem(server: server)
+        case "ServerPodcasts": navigationItem = SBServerPodcastsNavigationItem(server: server)
+        case "ServerDirectories": navigationItem = SBServerDirectoriesNavigationItem(server: server)
+        case "ServerSearch": navigationItem = SBServerSearchNavigationItem(server: server, query: "")
+        default: navigationItem = SBServerLibraryNavigationItem(server: server)
+        }
+        navigate(to: navigationItem)
     }
 
     @objc func populatedDefaultSections() {
+        // Global home section.
+        var predicate = NSPredicate(format: "(resourceName == %@)", "Browse")
+        var section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection
+        if section == nil {
+            section = SBSection.insertInManagedObjectContext(context: self.managedObjectContext)
+            section?.resourceName = "Browse"
+        }
+        section?.index = 0
+
+        // NSTreeController does not reliably materialize instances of the base
+        // Resource entity as children. Use the existing concrete Library entity
+        // for these navigation-only resources; local-library behavior is routed
+        // by name before the type-specific library fallback.
+        func browseResource(named name: String, index: Int) -> SBLibrary? {
+            let resourceRequest = NSFetchRequest<SBResource>(entityName: "Resource")
+            resourceRequest.predicate = NSPredicate(
+                format: "resourceName == %@ AND section.resourceName == %@", name, "Browse"
+            )
+            let matches = (try? managedObjectContext.fetch(resourceRequest)) ?? []
+            for resource in matches where !(resource is SBLibrary) {
+                managedObjectContext.delete(resource)
+            }
+
+            let libraryRequest = NSFetchRequest<SBLibrary>(entityName: "Library")
+            libraryRequest.predicate = resourceRequest.predicate
+            libraryRequest.fetchLimit = 1
+            let resource = (try? managedObjectContext.fetch(libraryRequest).first)
+                ?? SBLibrary.insertInManagedObjectContext(context: managedObjectContext)
+            resource.resourceName = name
+            resource.index = NSNumber(value: index)
+            resource.section = section
+            section?.addToResources(resource)
+            return resource
+        }
+
+        _ = browseResource(named: "Home", index: 0)
+        _ = browseResource(named: "Artists", index: 1)
+
         // Offline cache section. The former local library is intentionally hidden;
         // server downloads are files in MediaCache, not duplicate Core Data tracks.
-        var predicate = NSPredicate(format: "(resourceName == %@)", "Offline")
-        var section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection
+        predicate = NSPredicate(format: "(resourceName == %@)", "Offline")
+        section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection
         if section == nil {
             predicate = NSPredicate(format: "(resourceName == %@) OR (resourceName == %@) OR (resourceName == %@)", "Library", "LIBRARY", "Offline")
             section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection
@@ -224,9 +287,10 @@ extension SBDatabaseController {
             } else {
                 section = SBSection.insertInManagedObjectContext(context: self.managedObjectContext)
                 section?.resourceName = "Offline"
-                section?.index = 0
+                section?.index = 3
             }
         }
+        section?.index = 3
         
         // library resource
         predicate = NSPredicate(format: "(resourceName == %@)", "Music")
@@ -242,11 +306,14 @@ extension SBDatabaseController {
         if resource == nil {
             let downloads = SBDownloads.insertInManagedObjectContext(context: self.managedObjectContext)
             downloads.resourceName = "Downloads"
-            downloads.index = 1
+            downloads.index = 0
             downloads.section = section
             if let firstStore = self.managedObjectContext.persistentStoreCoordinator?.persistentStores.first {
                 self.managedObjectContext.assign(downloads, to: firstStore)
             }
+        } else {
+            resource?.index = 0
+            resource?.section = section
         }
         
         // playlist section
@@ -263,23 +330,31 @@ extension SBDatabaseController {
                 section?.index = 1
             }
         }
+        section?.index = 1
+
+        let allPlaylists = (try? managedObjectContext.fetch(NSFetchRequest<SBPlaylist>(entityName: "Playlist"))) ?? []
+        for playlist in allPlaylists {
+            playlist.section = playlist.server == nil ? nil : section
+        }
         
-        // servers section
-        predicate = NSPredicate(format: "(resourceName == %@)", "Servers")
+        // Servers are configured in Settings and do not appear in the sidebar.
+        predicate = NSPredicate(format: "(resourceName == %@) OR (resourceName == %@)", "Servers", "SERVERS")
         section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection
-        if section == nil {
-            predicate = NSPredicate(format: "(resourceName == %@)", "SERVERS")
-            section = try? self.managedObjectContext.fetch(entityNamed: "Section", predicate: predicate) as? SBSection
-            if let sect = section {
-                sect.resourceName = "Servers"
-            } else {
-                section = SBSection.insertInManagedObjectContext(context: self.managedObjectContext)
-                section?.resourceName = "Servers"
-                section?.index = 2
+        if let section {
+            if let resources = section.resources as? Set<SBResource> {
+                for case let server as SBServer in resources {
+                    server.section = nil
+                }
             }
+            managedObjectContext.delete(section)
         }
         
         self.managedObjectContext.processPendingChanges()
-        try? self.managedObjectContext.save()
+        do {
+            try self.managedObjectContext.save()
+        } catch {
+            NSLog("Unable to persist default sidebar sections: %@", error.localizedDescription)
+            NSApp.presentError(error)
+        }
     }
 }

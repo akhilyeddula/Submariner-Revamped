@@ -40,6 +40,7 @@ class SBDatabaseController: SBWindowController,
 
     // MARK: - Child View Controllers
     var onboardingController: SBOnboardingController!
+    var homeController: HomeController!
     var downloadsController: SBDownloadsController!
     var tracklistController: SBTracklistController!
     var playlistController: SBPlaylistController!
@@ -82,6 +83,7 @@ class SBDatabaseController: SBWindowController,
         
         // Child view controllers
         onboardingController = SBOnboardingController(managedObjectContext: context)
+        homeController = HomeController(managedObjectContext: context)
         downloadsController = SBDownloadsController(managedObjectContext: context)
         tracklistController = SBTracklistController(managedObjectContext: context)
         playlistController = SBPlaylistController(managedObjectContext: context)
@@ -101,6 +103,7 @@ class SBDatabaseController: SBWindowController,
         // Wire back-references
         let allControllers: [SBViewController] = [
             onboardingController,
+            homeController,
             tracklistController, playlistController, serverLibraryController,
             serverHomeController, serverDirectoryController,
             serverSearchController, serverUserController
